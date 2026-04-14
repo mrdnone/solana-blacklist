@@ -1,0 +1,12 @@
+target
+!target/patch
+.env
+*.yaml
+
+.idea
+
+data
+/snapshots
+
+.eslintcache
+/node_modules
