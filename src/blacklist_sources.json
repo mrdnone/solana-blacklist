@@ -1,0 +1,64 @@
+{
+  "solana::sfdp_rejects": {
+    "name": "solana::sfdp_rejects",
+    "url": "https://api.solana.org/api/community/v1/sfdp_participants",
+    "contact_into": {
+      "discord": "https://solana.com/discord",
+      "website": "https://solana.com"
+    },
+    "handler": "Json",
+    "filters": [
+      "?(@.state == 'Rejected')"
+    ],
+    "record_path": "$..*",
+    "pubkey_path": "$.mainnetBetaPubkey",
+    "reason_path": "$.state"
+  },
+  "sandwiched_me": {
+    "name": "sandwiched_me",
+    "url": "https://nextgen.mev-hub.snowgenesis.com/api/pub/validator_stats",
+    "fetch_headers": {
+      "X-API-KEY": "${SANDWICHED_ME_API_KEY}"
+    },
+    "contact_into": {
+      "website": "https://sandwiched.me",
+      "telegram": "https://t.me/ghostlogsxyz"
+    },
+    "handler": "Json",
+    "filters": [
+      "$.stats[?(@.period.Days == 30 && @.sandwichRate > 5)]"
+    ],
+    "record_path": "$.data.validators[*]",
+    "pubkey_path": "$.validatorVoteAccount",
+    "reason_template": "30-day sandwich rate: {$.stats[?(@.period.Days == 30)].sandwichRate:.2}%"
+  },
+  "hanabi": {
+    "name": "hanabi",
+    "url": "https://api.hanabi.so/validators/sandwiching-report",
+    "contact_into": {
+      "website": "https://hanabi.so/sandwiching"
+    },
+    "handler": "Json",
+    "filters": [
+      "?(@.flagged == true)"
+    ],
+    "record_path": "$..*",
+    "pubkey_path": "$.vote",
+    "reason_path": null
+  },
+  "jito:blacklist": {
+    "name": "jito:blacklist",
+    "url": "https://docs.google.com/spreadsheets/d/1S6HWr6KyVuRkgyG-liYmGA1gGTtKWCFr2qwP1sZPDoc/export?format=csv",
+    "contact_into": null,
+    "handler": {
+      "Csv": {
+        "delimiter": 44,
+        "headers": true
+      }
+    },
+    "filters": [],
+    "record_path": null,
+    "pubkey_path": "$.c1",
+    "reason_path": null
+  }
+}
