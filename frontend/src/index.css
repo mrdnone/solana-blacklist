@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@theme {
+  /* Meridian palette — near-black with blue-white accent glow */
+  --color-bg-primary: #060609;
+  --color-bg-secondary: #0a0a12;
+  --color-bg-card: #0d0d18;
+  --color-bg-card-hover: #12122a;
+
+  --color-text-primary: #e8e8f0;
+  --color-text-secondary: #8a8aa0;
+  --color-text-muted: #55556a;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-glow: rgba(255, 255, 255, 0.12);
+
+  --color-accent-glow: rgba(200, 210, 255, 0.15);
+  --color-accent-white: rgba(255, 255, 255, 0.9);
+
+  /* Font stacks matching Meridian */
+  --font-heading: "Space Grotesk", "Outfit", sans-serif;
+  --font-body: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle cosmic background — matching Meridian body::before */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(60, 120, 255, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 10%, rgba(255, 50, 80, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(160, 60, 220, 0.03) 0%, transparent 50%),
+    var(--color-bg-primary);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-primary); }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.10); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.20); }
+
+/* Text selection */
+::selection {
+  background: rgba(200, 210, 255, 0.2);
+  color: #fff;
+}
+
+/* Animations */
+@keyframes progress-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-progress {
+  animation: progress-bar 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 40px rgba(200, 210, 255, 0.08); }
+  50% { box-shadow: 0 0 60px rgba(200, 210, 255, 0.15); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* ============================================
+   STARS BACKGROUND — ported from Meridian
+   ============================================ */
+.stars {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 0%, rgba(15, 15, 40, 0.6) 0%, transparent 70%);
+}
+
+.star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.star--distant {
+  background: rgba(200, 210, 255, 0.7);
+}
+
+.star--mid {
+  background: rgba(220, 225, 255, 0.85);
+  box-shadow: 0 0 2px rgba(200, 210, 255, 0.3);
+}
+
+.star--bright {
+  background: #fff;
+  box-shadow: 0 0 6px 2px rgba(200, 215, 255, 0.5), 0 0 14px 4px rgba(180, 200, 255, 0.15);
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.1; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.shooting-star {
+  position: absolute;
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.9), transparent);
+  border-radius: 1px;
+  opacity: 0;
+  transform: rotate(145deg);
+  animation: shoot 1s ease-out forwards;
+  box-shadow: 0 0 6px rgba(200, 215, 255, 0.4);
+}
+
+@keyframes shoot {
+  0%   { opacity: 0; transform: rotate(145deg) translateX(0); }
+  5%   { opacity: 1; }
+  70%  { opacity: 0.6; }
+  100% { opacity: 0; transform: rotate(145deg) translateX(350px); }
+}
+
+/* ============================================
+   CARD HOVER GLOW LINE — Meridian signature
+   ============================================ */
+.card-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200, 210, 255, 0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+.card-glow:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   HERO ECLIPSE BACKGROUND
+   ============================================ */
+.hero-eclipse {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-eclipse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/images/eclipse-bg.jpg') center/cover no-repeat;
+  opacity: 0.35;
+  filter: brightness(0.8) contrast(1.1);
+}
+
+.hero-eclipse::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  background: linear-gradient(to top, var(--color-bg-primary) 0%, transparent 100%);
+  z-index: 1;
+}
