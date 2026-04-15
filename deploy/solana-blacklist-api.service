@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=www-data
 WorkingDirectory=/var/www/solana-blacklist
-ExecStart=/var/www/solana-blacklist/api
+ExecStart=/var/www/solana-blacklist/target/release/api
 Restart=on-failure
 RestartSec=5
 Environment=RUST_LOG=info
