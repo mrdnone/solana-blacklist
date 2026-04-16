@@ -15,17 +15,19 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    path::PathBuf,
     time::Duration,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use futures::stream::{self, StreamExt};
 use jsonpath_lib as jsonpath;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map as JMap, Value as Json, Value};
+use serde_json::{Map as JMap, Value as Json, Value, json};
 
+use crate::persistence::ValidatorMeta;
 use crate::utils::validate_solana_pubkey;
 
 pub const BLACKLIST_SOURCES_JSON: &str = include_str!("blacklist_sources.json");
@@ -45,7 +47,10 @@ pub struct BlacklistCollector {
 
 impl BlacklistCollector {
     pub fn new(opts: BlacklistOptions) -> Self {
-        Self { opts, sources: Default::default() }
+        Self {
+            opts,
+            sources: Default::default(),
+        }
     }
 
     pub fn with_sources(mut self, sources: impl Into<BlacklistSources>) -> Self {
@@ -92,12 +97,93 @@ impl BlacklistCollector {
         for (pk, rr) in pairs {
             map.entry(pk).or_default().insert(rr);
         }
-        let entries = map
+        let mut entries = map
             .into_iter()
-            .map(|(k, v)| BlacklistResultEntry { pubkey: k, sources: v.into_iter().collect() })
+            .map(|(k, v)| {
+                let sources_vec: Vec<BlacklistResultEntrySource> = v.into_iter().collect();
+                let name = sources_vec
+                    .iter()
+                    .filter_map(|s| s.validator_name.as_ref())
+                    .next()
+                    .cloned();
+                BlacklistResultEntry {
+                    pubkey: k,
+                    name,
+                    first_seen: None,
+                    sources: sources_vec,
+                }
+            })
             .collect::<Vec<_>>();
 
-        Ok(BlacklistResult { unique_pubkeys: entries.len(), sources: self.sources.len(), entries })
+        // Fetch active validators (RPC + Stakewiz) concurrently
+        let (rpc_set, stakewiz_map) = tokio::join!(
+            fetch_active_vote_pubkeys(&client, &self.opts.solana_rpc_url),
+            fetch_stakewiz_validators(&client),
+        );
+
+        // Filter inactive validators: only keep entries present in at least one active set.
+        // Guard: skip if the RPC set is empty (RPC failure) to avoid dropping everything.
+        if self.opts.filter_inactive && !rpc_set.is_empty() {
+            let before = entries.len();
+            entries.retain(|e| rpc_set.contains(&e.pubkey) || stakewiz_map.contains_key(&e.pubkey));
+            println!(
+                "[active-filter] Filtered {before} → {} entries ({} removed)",
+                entries.len(),
+                before - entries.len(),
+            );
+        }
+
+        // Open DB once — reuse for both Stakewiz metadata upsert and first-seen persistence
+        let store = self
+            .opts
+            .persistence_path
+            .as_ref()
+            .and_then(|db_path| crate::persistence::FirstSeenStore::open(db_path).ok());
+
+        // Upsert Stakewiz metadata into the validators table
+        if let Some(ref store) = store {
+            if !stakewiz_map.is_empty() {
+                let metas: Vec<ValidatorMeta> = stakewiz_map.values().cloned().collect();
+                if let Err(err) = store.upsert_validators(&metas) {
+                    eprintln!("[persistence] Failed to upsert validators: {err:#}");
+                }
+            }
+        }
+
+        // Enrich names: prefer bulk lookup from Stakewiz data, fallback to per-pubkey HTTP
+        if !stakewiz_map.is_empty() {
+            for entry in &mut entries {
+                if entry.name.is_none() {
+                    if let Some(meta) = stakewiz_map.get(&entry.pubkey) {
+                        if let Some(ref n) = meta.name {
+                            if !n.is_empty() {
+                                entry.name = Some(n.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        } else if self.opts.enrich_names {
+            enrich_names(&client, &mut entries, self.opts.concurrency).await;
+        }
+
+        // Persistence: record first-seen dates and populate entries
+        if let Some(ref store) = store {
+            let pubkeys: Vec<&str> = entries.iter().map(|e| e.pubkey.as_str()).collect();
+            let _ = store.record_seen(&pubkeys);
+            if let Ok(dates) = store.get_dates(&pubkeys) {
+                for entry in &mut entries {
+                    entry.first_seen = dates.get(&entry.pubkey).cloned();
+                }
+            }
+        }
+
+        Ok(BlacklistResult {
+            unique_pubkeys: entries.len(),
+            sources: self.sources.len(),
+            fetched_at: Some(chrono::Utc::now().to_rfc3339()),
+            entries,
+        })
     }
 }
 
@@ -133,17 +219,31 @@ pub struct BlacklistSource {
     /// Optional JSONPath evaluated relative to the record/row.
     #[serde(default)]
     pub reason_path: Option<String>,
+    /// Optional JSONPath for extracting the validator name from the record/row.
+    #[serde(default)]
+    pub name_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct BlacklistOptions {
     pub concurrency: usize,
     pub timeout_secs: u64,
+    pub enrich_names: bool,
+    pub persistence_path: Option<PathBuf>,
+    pub filter_inactive: bool,
+    pub solana_rpc_url: String,
 }
 
 impl Default for BlacklistOptions {
     fn default() -> Self {
-        Self { concurrency: 8, timeout_secs: 20 }
+        Self {
+            concurrency: 8,
+            timeout_secs: 20,
+            enrich_names: true,
+            persistence_path: None,
+            filter_inactive: true,
+            solana_rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
+        }
     }
 }
 
@@ -151,12 +251,18 @@ impl Default for BlacklistOptions {
 pub struct BlacklistResult {
     pub unique_pubkeys: usize,
     pub sources: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<String>,
     pub entries: Vec<BlacklistResultEntry>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BlacklistResultEntry {
     pub pubkey: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_seen: Option<String>,
     pub sources: Vec<BlacklistResultEntrySource>,
 }
 
@@ -165,6 +271,8 @@ pub struct BlacklistResultEntrySource {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validator_name: Option<String>,
 }
 
 async fn process_json(
@@ -182,7 +290,12 @@ async fn process_json(
     };
 
     // 2) filter and 3) extract
-    extract_from_records(records.into_iter().filter(|r| passes_filters(r, &s.filters)), s)
+    extract_from_records(
+        records
+            .into_iter()
+            .filter(|r| passes_filters(r, &s.filters)),
+        s,
+    )
 }
 
 async fn process_csv(
@@ -201,7 +314,12 @@ async fn process_csv(
         .from_reader(body.as_bytes());
 
     let headers = if headers {
-        Some(rdr.headers()?.iter().map(|h| h.to_string()).collect::<Vec<_>>())
+        Some(
+            rdr.headers()?
+                .iter()
+                .map(|h| h.to_string())
+                .collect::<Vec<_>>(),
+        )
     } else {
         None
     };
@@ -222,12 +340,19 @@ fn passes_filters(record: &Json, filters: &[String]) -> bool {
     for f in filters {
         let ft = f.trim();
         let ok = if ft.starts_with('$') {
-            jsonpath::select(record, ft).map(|v| !v.is_empty()).unwrap_or(false)
+            jsonpath::select(record, ft)
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
         } else if ft.starts_with("?(") || ft.starts_with("[?(") {
             let wrap = json!([record]);
-            let path =
-                if ft.starts_with("[?(") { format!("${}", ft) } else { format!("$[{}]", ft) };
-            jsonpath::select(&wrap, &path).map(|v| !v.is_empty()).unwrap_or(false)
+            let path = if ft.starts_with("[?(") {
+                format!("${}", ft)
+            } else {
+                format!("$[{}]", ft)
+            };
+            jsonpath::select(&wrap, &path)
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
         } else {
             false
         };
@@ -258,6 +383,16 @@ fn extract_from_records<'a>(
             None
         };
 
+        let validator_name = if let Some(np) = &s.name_path {
+            jsonpath::select(rec, np)
+                .unwrap_or_default()
+                .first()
+                .map(|n| node_to_string(n).to_string())
+                .filter(|n| !n.is_empty())
+        } else {
+            None
+        };
+
         for n in pks {
             let pk = node_to_string(n);
             if validate_solana_pubkey(pk.trim()).is_err() {
@@ -265,7 +400,11 @@ fn extract_from_records<'a>(
             }
             out.push((
                 pk.to_string(),
-                BlacklistResultEntrySource { name: s.name.clone(), reason: reason.clone() },
+                BlacklistResultEntrySource {
+                    name: s.name.clone(),
+                    reason: reason.clone(),
+                    validator_name: validator_name.clone(),
+                },
             ));
         }
     }
@@ -428,6 +567,194 @@ fn node_to_string(v: &'_ Value) -> Cow<'_, str> {
     }
 }
 
+// ── RPC types for getVoteAccounts ────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct RpcVoteAccountsResponse {
+    result: RpcVoteAccountsResult,
+}
+
+#[derive(Deserialize)]
+struct RpcVoteAccountsResult {
+    current: Vec<RpcVoteAccount>,
+    delinquent: Vec<RpcVoteAccount>,
+}
+
+#[derive(Deserialize)]
+struct RpcVoteAccount {
+    #[serde(rename = "votePubkey")]
+    vote_pubkey: String,
+}
+
+/// Fetch all active vote pubkeys (current + delinquent) from the Solana RPC.
+/// Returns an empty set on any error (non-fatal: the caller skips the filter).
+async fn fetch_active_vote_pubkeys(client: &Client, rpc_url: &str) -> HashSet<String> {
+    let body = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getVoteAccounts",
+        "params": [{ "keepUnstakedDelinquents": true }]
+    });
+
+    let result = async {
+        let resp = client
+            .post(rpc_url)
+            .json(&body)
+            .send()
+            .await
+            .context("RPC request failed")?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("RPC HTTP {}", resp.status().as_u16()));
+        }
+
+        let parsed: RpcVoteAccountsResponse = resp.json().await.context("RPC parse failed")?;
+        let mut set =
+            HashSet::with_capacity(parsed.result.current.len() + parsed.result.delinquent.len());
+        for v in parsed.result.current {
+            set.insert(v.vote_pubkey);
+        }
+        for v in parsed.result.delinquent {
+            set.insert(v.vote_pubkey);
+        }
+        Ok(set)
+    }
+    .await;
+
+    match result {
+        Ok(set) => {
+            println!(
+                "[active-filter] RPC returned {} active vote accounts",
+                set.len()
+            );
+            set
+        }
+        Err(err) => {
+            eprintln!("[active-filter] RPC fetch failed, skipping filter: {err:#}");
+            HashSet::new()
+        }
+    }
+}
+
+// ── Stakewiz types ───────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct StakewizValidatorRaw {
+    vote_identity: Option<String>,
+    identity: Option<String>,
+    name: Option<String>,
+    delinquent: Option<bool>,
+    activated_stake: Option<f64>,
+    commission: Option<f64>,
+    skip_rate: Option<f64>,
+    uptime: Option<f64>,
+    version: Option<String>,
+    wiz_score: Option<f64>,
+    apy_estimate: Option<f64>,
+    ip_country: Option<String>,
+    image: Option<String>,
+    website: Option<String>,
+}
+
+/// Fetch all validators from the Stakewiz API and return as a map keyed by vote_identity.
+/// Returns an empty map on any error (non-fatal).
+async fn fetch_stakewiz_validators(client: &Client) -> HashMap<String, ValidatorMeta> {
+    let result = async {
+        let resp = client
+            .get("https://api.stakewiz.com/validators")
+            .send()
+            .await
+            .context("Stakewiz request failed")?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Stakewiz HTTP {}", resp.status().as_u16()));
+        }
+
+        let raw: Vec<StakewizValidatorRaw> = resp.json().await.context("Stakewiz parse failed")?;
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut map = HashMap::with_capacity(raw.len());
+        for r in raw {
+            let Some(ref vote_id) = r.vote_identity else {
+                continue;
+            };
+            map.insert(
+                vote_id.clone(),
+                ValidatorMeta {
+                    vote_identity: vote_id.clone(),
+                    identity: r.identity,
+                    name: r.name,
+                    delinquent: r.delinquent,
+                    activated_stake: r.activated_stake,
+                    commission: r.commission,
+                    skip_rate: r.skip_rate,
+                    uptime: r.uptime,
+                    version: r.version,
+                    wiz_score: r.wiz_score,
+                    apy_estimate: r.apy_estimate,
+                    ip_country: r.ip_country,
+                    image: r.image,
+                    website: r.website,
+                    updated_at: now.clone(),
+                },
+            );
+        }
+        Ok(map)
+    }
+    .await;
+
+    match result {
+        Ok(map) => {
+            println!("[active-filter] Stakewiz returned {} validators", map.len());
+            map
+        }
+        Err(err) => {
+            eprintln!(
+                "[active-filter] Stakewiz fetch failed, names will use per-pubkey fallback: {err:#}",
+            );
+            HashMap::new()
+        }
+    }
+}
+
+async fn enrich_names(client: &Client, entries: &mut [BlacklistResultEntry], concurrency: usize) {
+    let missing: Vec<(usize, String)> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.name.is_none())
+        .map(|(i, e)| (i, e.pubkey.clone()))
+        .collect();
+
+    if missing.is_empty() {
+        return;
+    }
+
+    let results: Vec<(usize, Option<String>)> =
+        stream::iter(missing.into_iter().map(|(i, pubkey)| {
+            let client = client.clone();
+            async move {
+                let url = format!("https://api.stakewiz.com/validator/{}", pubkey);
+                let name = async {
+                    let resp = client.get(&url).send().await.ok()?;
+                    if !resp.status().is_success() {
+                        return None;
+                    }
+                    let json: Value = resp.json().await.ok()?;
+                    let n = json.get("name")?.as_str()?.to_string();
+                    if n.is_empty() { None } else { Some(n) }
+                }
+                .await;
+                (i, name)
+            }
+        }))
+        .buffer_unordered(concurrency)
+        .collect::<Vec<_>>()
+        .await;
+
+    for (i, name) in results {
+        entries[i].name = name;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -438,10 +765,17 @@ mod tests {
     #[ignore]
     async fn test_blacklist_collector_integration() {
         let sources = default_blacklist_sources();
-        let out = BlacklistCollector::default().with_sources(sources).run().await.unwrap();
+        let out = BlacklistCollector::default()
+            .with_sources(sources)
+            .run()
+            .await
+            .unwrap();
 
         assert!(out.sources > 0, "should have at least one source");
-        assert!(out.unique_pubkeys > 0, "should find at least one blacklisted pubkey");
+        assert!(
+            out.unique_pubkeys > 0,
+            "should find at least one blacklisted pubkey"
+        );
         assert!(!out.entries.is_empty(), "entries should not be empty");
 
         // Every entry must have a valid pubkey and at least one source
@@ -452,7 +786,10 @@ mod tests {
                 "pubkey '{}' should be a valid Solana pubkey",
                 entry.pubkey
             );
-            assert!(!entry.sources.is_empty(), "entry should have at least one source");
+            assert!(
+                !entry.sources.is_empty(),
+                "entry should have at least one source"
+            );
         }
 
         println!("{:#}", json!(out));
@@ -473,8 +810,10 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_blacklist_source_contains_pubkey() {
-        let source_key = std::env::var("TEST_BLACKLIST_SOURCE").unwrap_or("jito:blacklist".to_string());
-        let expected_pubkey = std::env::var("TEST_BLACKLIST_PUBKEY").unwrap_or("7MTjmteQHhthwwTZhUzsc2dP4NBvGNRqj8jzdqNxHFGE".to_string());
+        let source_key =
+            std::env::var("TEST_BLACKLIST_SOURCE").unwrap_or("jito:blacklist".to_string());
+        let expected_pubkey = std::env::var("TEST_BLACKLIST_PUBKEY")
+            .unwrap_or("7MTjmteQHhthwwTZhUzsc2dP4NBvGNRqj8jzdqNxHFGE".to_string());
 
         let all_sources = default_blacklist_sources();
         let source = all_sources
@@ -488,7 +827,10 @@ mod tests {
             })
             .clone();
 
-        println!("Testing source '{}' for pubkey '{}'", source_key, expected_pubkey);
+        println!(
+            "Testing source '{}' for pubkey '{}'",
+            source_key, expected_pubkey
+        );
 
         let mut single_source = HashMap::new();
         single_source.insert(source_key.clone(), source);
@@ -508,7 +850,9 @@ mod tests {
         assert!(
             found.is_none(),
             "Pubkey '{}' was found in source '{}'. Total entries: {}",
-            expected_pubkey, source_key, out.entries.len()
+            expected_pubkey,
+            source_key,
+            out.entries.len()
         );
     }
 
@@ -641,7 +985,10 @@ mod tests {
         let template = "30-day sandwich rate: {$.stats[?(@.period.Days == 30)].sandwichRate:.2}% \
                         (flagged for MEV sandwich attacks)";
         let result = interpolate_template(template, &record);
-        assert_eq!(result, "30-day sandwich rate: 61.45% (flagged for MEV sandwich attacks)");
+        assert_eq!(
+            result,
+            "30-day sandwich rate: 61.45% (flagged for MEV sandwich attacks)"
+        );
     }
 
     #[test]
@@ -729,5 +1076,223 @@ mod tests {
         let template = "Rate: {rate:.1}% (was {rate:.2}%)";
         let result = interpolate_template(template, &record);
         assert_eq!(result, "Rate: 15.5% (was 15.50%)");
+    }
+
+    #[test]
+    fn test_name_path_extraction() {
+        // Simulate a record with a name field, like Hanabi
+        let record = json!({
+            "vote": "7wqiBhRVEkbV3A8LbR9W1eNb5s27CBwoRCVro1okB6ew",
+            "name": "My Validator",
+            "flagged": true
+        });
+
+        let source = BlacklistSource {
+            name: "test_source".to_string(),
+            url: "http://example.com".to_string(),
+            fetch_headers: None,
+            contact_into: Value::Null,
+            handler: BlacklistHandler::Json,
+            record_path: None,
+            pubkey_path: "$.vote".to_string(),
+            filters: vec![],
+            reason_template: None,
+            reason_path: None,
+            name_path: Some("$.name".to_string()),
+        };
+
+        let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
+        assert_eq!(results.len(), 1);
+        let (pk, entry_source) = &results[0];
+        assert_eq!(pk, "7wqiBhRVEkbV3A8LbR9W1eNb5s27CBwoRCVro1okB6ew");
+        assert_eq!(
+            entry_source.validator_name,
+            Some("My Validator".to_string())
+        );
+    }
+
+    #[test]
+    fn test_name_path_none_when_not_configured() {
+        let record = json!({
+            "vote": "7wqiBhRVEkbV3A8LbR9W1eNb5s27CBwoRCVro1okB6ew",
+            "name": "My Validator"
+        });
+
+        let source = BlacklistSource {
+            name: "test_source".to_string(),
+            url: "http://example.com".to_string(),
+            fetch_headers: None,
+            contact_into: Value::Null,
+            handler: BlacklistHandler::Json,
+            record_path: None,
+            pubkey_path: "$.vote".to_string(),
+            filters: vec![],
+            reason_template: None,
+            reason_path: None,
+            name_path: None, // not configured
+        };
+
+        let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].1.validator_name, None);
+    }
+
+    #[test]
+    fn test_name_merging_picks_first_non_none() {
+        // Simulate multiple sources for the same pubkey, some with names, some without
+        let sources_with_names = vec![
+            BlacklistResultEntrySource {
+                name: "source_a".to_string(),
+                reason: None,
+                validator_name: None,
+            },
+            BlacklistResultEntrySource {
+                name: "source_b".to_string(),
+                reason: None,
+                validator_name: Some("Validator B".to_string()),
+            },
+            BlacklistResultEntrySource {
+                name: "source_c".to_string(),
+                reason: None,
+                validator_name: Some("Validator C".to_string()),
+            },
+        ];
+
+        let name = sources_with_names
+            .iter()
+            .filter_map(|s| s.validator_name.as_ref())
+            .next()
+            .cloned();
+
+        assert_eq!(name, Some("Validator B".to_string()));
+    }
+
+    #[test]
+    fn test_name_merging_all_none() {
+        let sources_no_names = vec![
+            BlacklistResultEntrySource {
+                name: "source_a".to_string(),
+                reason: None,
+                validator_name: None,
+            },
+            BlacklistResultEntrySource {
+                name: "source_b".to_string(),
+                reason: None,
+                validator_name: None,
+            },
+        ];
+
+        let name = sources_no_names
+            .iter()
+            .filter_map(|s| s.validator_name.as_ref())
+            .next()
+            .cloned();
+
+        assert_eq!(name, None);
+    }
+
+    #[test]
+    fn test_name_path_empty_string_filtered() {
+        // Empty name should be filtered to None
+        let record = json!({
+            "vote": "7wqiBhRVEkbV3A8LbR9W1eNb5s27CBwoRCVro1okB6ew",
+            "name": ""
+        });
+
+        let source = BlacklistSource {
+            name: "test_source".to_string(),
+            url: "http://example.com".to_string(),
+            fetch_headers: None,
+            contact_into: Value::Null,
+            handler: BlacklistHandler::Json,
+            record_path: None,
+            pubkey_path: "$.vote".to_string(),
+            filters: vec![],
+            reason_template: None,
+            reason_path: None,
+            name_path: Some("$.name".to_string()),
+        };
+
+        let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].1.validator_name, None);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_fetch_active_vote_pubkeys() {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+        let set = fetch_active_vote_pubkeys(&client, "https://api.mainnet-beta.solana.com").await;
+        assert!(
+            !set.is_empty(),
+            "RPC should return non-empty set of vote pubkeys"
+        );
+        println!(
+            "[test] fetch_active_vote_pubkeys returned {} pubkeys",
+            set.len()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_fetch_stakewiz_validators() {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+        let map = fetch_stakewiz_validators(&client).await;
+        assert!(
+            !map.is_empty(),
+            "Stakewiz should return non-empty validator map"
+        );
+        // Verify at least one entry has a name
+        let has_name = map.values().any(|v| v.name.is_some());
+        assert!(has_name, "at least one validator should have a name");
+        println!(
+            "[test] fetch_stakewiz_validators returned {} validators",
+            map.len()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_collector_with_active_filter() {
+        let sources = default_blacklist_sources();
+
+        // Run without filter
+        let opts_no_filter = BlacklistOptions {
+            filter_inactive: false,
+            ..BlacklistOptions::default()
+        };
+        let unfiltered = BlacklistCollector::new(opts_no_filter)
+            .with_sources(sources.clone())
+            .run()
+            .await
+            .unwrap();
+
+        // Run with filter (default)
+        let opts_filter = BlacklistOptions {
+            filter_inactive: true,
+            ..BlacklistOptions::default()
+        };
+        let filtered = BlacklistCollector::new(opts_filter)
+            .with_sources(sources)
+            .run()
+            .await
+            .unwrap();
+
+        println!(
+            "[test] unfiltered: {} entries, filtered: {} entries",
+            unfiltered.unique_pubkeys, filtered.unique_pubkeys
+        );
+        assert!(
+            filtered.unique_pubkeys <= unfiltered.unique_pubkeys,
+            "filtered count ({}) should be <= unfiltered count ({})",
+            filtered.unique_pubkeys,
+            unfiltered.unique_pubkeys
+        );
     }
 }

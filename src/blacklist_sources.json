@@ -44,7 +44,8 @@
     ],
     "record_path": "$..*",
     "pubkey_path": "$.vote",
-    "reason_path": null
+    "reason_path": null,
+    "name_path": "$.name"
   },
   "jito:blacklist": {
     "name": "jito:blacklist",
@@ -59,6 +60,7 @@
     "filters": [],
     "record_path": null,
     "pubkey_path": "$.c1",
-    "reason_path": null
+    "reason_path": null,
+    "name_path": "$.c0"
   }
 }
