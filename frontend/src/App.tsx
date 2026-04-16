@@ -7,6 +7,7 @@ import { PubkeyLookup } from './components/PubkeyLookup'
 import { SourceFilter } from './components/SourceFilter'
 import { Stars } from './components/Stars'
 import { StatsBar } from './components/StatsBar'
+import { SuggestSource } from './components/SuggestSource'
 import { TableSearch } from './components/TableSearch'
 import { useBlacklist } from './hooks/useBlacklist'
 import { usePubkeyLookup } from './hooks/usePubkeyLookup'
@@ -38,11 +39,14 @@ function filterEntries(
   return result
 }
 
+type Page = 'home' | 'suggest-source'
+
 export default function App() {
   const { sourceNames } = useSources()
   const { data, isLoading, error, fetchedAt, refetch } = useBlacklist()
   const pubkeyLookup = usePubkeyLookup()
 
+  const [page, setPage] = useState<Page>('home')
   const [activeSource, setActiveSource] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearch = useDeferredValue(searchQuery)
@@ -59,58 +63,62 @@ export default function App() {
       <Stars />
 
       <div className="relative z-10">
-        <Header />
+        <Header onSuggestSource={() => setPage('suggest-source')} />
 
-        <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10 space-y-7">
-          {/* Stats */}
-          <StatsBar
-            uniquePubkeys={data?.unique_pubkeys ?? null}
-            sourceCount={data?.sources ?? null}
-            fetchedAt={fetchedAt}
-            isLoading={isLoading}
-          />
-
-          {/* Error */}
-          {error && !isFirstLoad && (
-            <ErrorBanner message={error} onRetry={refetch} />
-          )}
-
-          {/* Source filter */}
-          {sourceNames.length > 0 && (
-            <SourceFilter sources={sourceNames} active={activeSource} onChange={setActiveSource} />
-          )}
-
-          {/* Pubkey lookup */}
-          <PubkeyLookup
-            onLookup={pubkeyLookup.lookup}
-            onClear={pubkeyLookup.clear}
-            isLoading={pubkeyLookup.isLoading}
-            result={pubkeyLookup.result}
-            error={pubkeyLookup.error}
-          />
-
-          {/* Search + Table */}
-          {!isFirstLoad && (
-            <TableSearch value={searchQuery} onChange={setSearchQuery} />
-          )}
-
-          {(isFirstLoad || data) && (
-            <BlacklistTable
-              entries={filteredEntries}
+        {page === 'suggest-source' ? (
+          <SuggestSource onBack={() => setPage('home')} />
+        ) : (
+          <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10 space-y-7">
+            {/* Stats */}
+            <StatsBar
+              uniquePubkeys={data?.unique_pubkeys ?? null}
+              sourceCount={data?.sources ?? null}
+              fetchedAt={fetchedAt}
               isLoading={isLoading}
-              isFirstLoad={isFirstLoad}
-              totalCount={data?.unique_pubkeys ?? null}
             />
-          )}
 
-          {/* First load error */}
-          {error && isFirstLoad && (
-            <ErrorBanner
-              message={`Failed to load blacklist data: ${error}`}
-              onRetry={refetch}
+            {/* Error */}
+            {error && !isFirstLoad && (
+              <ErrorBanner message={error} onRetry={refetch} />
+            )}
+
+            {/* Source filter */}
+            {sourceNames.length > 0 && (
+              <SourceFilter sources={sourceNames} active={activeSource} onChange={setActiveSource} />
+            )}
+
+            {/* Pubkey lookup */}
+            <PubkeyLookup
+              onLookup={pubkeyLookup.lookup}
+              onClear={pubkeyLookup.clear}
+              isLoading={pubkeyLookup.isLoading}
+              result={pubkeyLookup.result}
+              error={pubkeyLookup.error}
             />
-          )}
-        </main>
+
+            {/* Search + Table */}
+            {!isFirstLoad && (
+              <TableSearch value={searchQuery} onChange={setSearchQuery} />
+            )}
+
+            {(isFirstLoad || data) && (
+              <BlacklistTable
+                entries={filteredEntries}
+                isLoading={isLoading}
+                isFirstLoad={isFirstLoad}
+                totalCount={data?.unique_pubkeys ?? null}
+              />
+            )}
+
+            {/* First load error */}
+            {error && isFirstLoad && (
+              <ErrorBanner
+                message={`Failed to load blacklist data: ${error}`}
+                onRetry={refetch}
+              />
+            )}
+          </main>
+        )}
 
         {/* Footer */}
         <footer className="border-t border-white/[0.04] py-8 mt-10">
