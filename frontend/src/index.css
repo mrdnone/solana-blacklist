@@ -1,23 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  /* Meridian palette — near-black with blue-white accent glow */
+  /* Solana-accented dark palette — vivid green/purple on near-black */
   --color-bg-primary: #060609;
   --color-bg-secondary: #0a0a12;
   --color-bg-card: #0d0d18;
   --color-bg-card-hover: #12122a;
 
-  --color-text-primary: #e8e8f0;
-  --color-text-secondary: #8a8aa0;
-  --color-text-muted: #55556a;
+  --color-text-primary: #f0f0f8;
+  --color-text-secondary: #b4b4cc;
+  --color-text-muted: #7a7a98;
 
   --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-border-glow: rgba(255, 255, 255, 0.12);
 
-  --color-accent-glow: rgba(200, 210, 255, 0.15);
+  --color-accent-green: #14F195;
+  --color-accent-purple: #9945FF;
+  --color-accent-glow: rgba(20, 241, 149, 0.12);
   --color-accent-white: rgba(255, 255, 255, 0.9);
 
-  /* Font stacks matching Meridian */
+  /* Font stacks */
   --font-heading: "Space Grotesk", "Outfit", sans-serif;
   --font-body: "Outfit", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
@@ -32,16 +34,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Subtle cosmic background — matching Meridian body::before */
+/* Subtle cosmic background — Solana green/purple nebula */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse at 20% 20%, rgba(60, 120, 255, 0.04) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 10%, rgba(255, 50, 80, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(160, 60, 220, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 20%, rgba(20, 241, 149, 0.03) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 10%, rgba(153, 69, 255, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(153, 69, 255, 0.03) 0%, transparent 50%),
     var(--color-bg-primary);
 }
 
@@ -53,7 +55,7 @@ body::before {
 
 /* Text selection */
 ::selection {
-  background: rgba(200, 210, 255, 0.2);
+  background: rgba(20, 241, 149, 0.2);
   color: #fff;
 }
 
@@ -68,8 +70,8 @@ body::before {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 40px rgba(200, 210, 255, 0.08); }
-  50% { box-shadow: 0 0 60px rgba(200, 210, 255, 0.15); }
+  0%, 100% { box-shadow: 0 0 40px rgba(20, 241, 149, 0.06), 0 0 40px rgba(153, 69, 255, 0.06); }
+  50% { box-shadow: 0 0 60px rgba(20, 241, 149, 0.12), 0 0 60px rgba(153, 69, 255, 0.10); }
 }
 
 .animate-pulse-glow {
@@ -136,7 +138,7 @@ body::before {
 }
 
 /* ============================================
-   CARD HOVER GLOW LINE — Meridian signature
+   CARD HOVER GLOW LINE — Solana accent
    ============================================ */
 .card-glow {
   position: relative;
@@ -150,7 +152,7 @@ body::before {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(200, 210, 255, 0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(20, 241, 149, 0.25), rgba(153, 69, 255, 0.2), transparent);
   opacity: 0;
   transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;

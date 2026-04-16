@@ -21,12 +21,12 @@ export function TableSearch({ value, onChange }: Props) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Filter results by pubkey, source, or reason..."
-        className="w-full rounded-xl border border-white/[0.06] bg-[#0d0d18] py-3 pl-11 pr-4 text-[0.85rem] text-text-primary placeholder-text-muted outline-none focus:border-white/[0.15] focus:shadow-[0_0_40px_rgba(200,210,255,0.06)] transition-all duration-300 font-body"
+        className="w-full rounded-xl border border-white/[0.08] bg-[#0d0d18] py-3 pl-11 pr-4 text-[0.85rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300 font-body"
       />
       {value && (
         <button
           onClick={() => onChange('')}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-all duration-300"
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-all duration-300"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

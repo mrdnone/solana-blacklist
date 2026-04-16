@@ -12,7 +12,10 @@ export function BlacklistRow({ entry }: Props) {
     .map((s) => s.reason!)
 
   return (
-    <tr className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-all duration-300">
+    <tr className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300">
+      <td className="px-5 py-3 text-[0.82rem] text-text-primary truncate" title={entry.name ?? undefined}>
+        {entry.name ?? <span className="text-text-muted">—</span>}
+      </td>
       <td className="px-5 py-3">
         <PubkeyCell pubkey={entry.pubkey} />
       </td>
@@ -23,8 +26,11 @@ export function BlacklistRow({ entry }: Props) {
           ))}
         </div>
       </td>
-      <td className="px-5 py-3 text-[0.82rem] text-text-secondary">
+      <td className="px-5 py-3 text-[0.82rem] text-text-secondary truncate" title={reasons.length > 0 ? reasons.join('; ') : undefined}>
         {reasons.length > 0 ? reasons.join('; ') : <span className="text-text-muted">—</span>}
+      </td>
+      <td className="px-5 py-3 text-[0.78rem] font-mono text-text-secondary whitespace-nowrap">
+        {entry.first_seen ?? <span className="text-text-muted">—</span>}
       </td>
     </tr>
   )

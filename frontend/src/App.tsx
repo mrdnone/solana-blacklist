@@ -28,6 +28,7 @@ function filterEntries(
     result = result.filter(
       (e) =>
         e.pubkey.toLowerCase().includes(q) ||
+        e.name?.toLowerCase().includes(q) ||
         e.sources.some(
           (s) => s.name.toLowerCase().includes(q) || s.reason?.toLowerCase().includes(q),
         ),
@@ -113,7 +114,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="border-t border-white/[0.04] py-8 mt-10">
-          <p className="text-center text-[0.72rem] tracking-[2px] uppercase text-text-muted font-mono">
+          <p className="text-center text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
             Solana Blacklist Explorer
           </p>
         </footer>

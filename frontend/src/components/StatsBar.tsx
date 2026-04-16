@@ -15,12 +15,12 @@ function StatTile({
   isLoading: boolean
 }) {
   return (
-    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18]/40 px-5 py-5 flex-1 min-w-0 text-center transition-all duration-400 hover:border-white/[0.12] hover:shadow-[0_0_40px_rgba(200,210,255,0.08)] hover:bg-[#12122a]">
+    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18]/40 px-5 py-5 flex-1 min-w-0 text-center transition-all duration-400 hover:border-accent-green/20 hover:shadow-[0_0_40px_rgba(20,241,149,0.06)] hover:bg-[#12122a]">
       <p className="text-[0.72rem] tracking-[3px] uppercase text-text-muted mb-2 font-mono">{label}</p>
       {isLoading ? (
         <div className="h-8 w-20 mx-auto rounded bg-white/[0.03] animate-pulse" />
       ) : (
-        <p className="text-[1.8rem] font-heading font-bold tracking-[-1px] bg-gradient-to-b from-white to-[#888899] bg-clip-text text-transparent">
+        <p className="text-[1.8rem] font-heading font-bold tracking-[-1px] bg-gradient-to-r from-accent-green to-accent-purple bg-clip-text text-transparent">
           {value}
         </p>
       )}

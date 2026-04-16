@@ -16,7 +16,8 @@ export function useBlacklist() {
       .then((result) => {
         if (isMounted.current) {
           setData(result)
-          setFetchedAt(new Date())
+          // Use the server-side fetched_at timestamp if available
+          setFetchedAt(result.fetched_at ? new Date(result.fetched_at) : new Date())
           setIsLoading(false)
         }
       })
