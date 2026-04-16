@@ -1,0 +1,15 @@
+{
+  "name": "hanabi",
+  "url": "https://api.hanabi.so/validators/sandwiching-report",
+  "contact_into": {
+    "website": "https://hanabi.so/sandwiching"
+  },
+  "handler": "Json",
+  "filters": [
+    "?(@.flagged == true)"
+  ],
+  "record_path": "$..*",
+  "pubkey_path": "$.vote",
+  "reason_path": null,
+  "name_path": "$.name"
+}

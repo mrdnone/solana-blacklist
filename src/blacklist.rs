@@ -30,11 +30,24 @@ use serde_json::{Map as JMap, Value as Json, Value, json};
 use crate::persistence::ValidatorMeta;
 use crate::utils::validate_solana_pubkey;
 
-pub const BLACKLIST_SOURCES_JSON: &str = include_str!("blacklist_sources.json");
+/// Each source is a separate JSON file under `src/sources/`.
+/// Adding a new source = dropping a new `.json` file in that folder and adding it here.
+const SOURCE_FILES: &[(&str, &str)] = &[
+    ("solana::sfdp_rejects", include_str!("sources/solana_sfdp_rejects.json")),
+    ("sandwiched_me", include_str!("sources/sandwiched_me.json")),
+    ("hanabi", include_str!("sources/hanabi.json")),
+    ("jito:blacklist", include_str!("sources/jito_blacklist.json")),
+];
 
 pub fn default_blacklist_sources() -> BlacklistSources {
-    serde_json::from_str::<BlacklistSources>(BLACKLIST_SOURCES_JSON)
-        .expect("Failed to load blacklist sources")
+    SOURCE_FILES
+        .iter()
+        .map(|(key, json)| {
+            let source: BlacklistSource =
+                serde_json::from_str(json).unwrap_or_else(|e| panic!("Failed to parse source {key}: {e}"));
+            (key.to_string(), source)
+        })
+        .collect()
 }
 
 pub type BlacklistSources = HashMap<String, BlacklistSource>;

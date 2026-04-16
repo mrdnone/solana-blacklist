@@ -1,0 +1,16 @@
+{
+  "name": "jito:blacklist",
+  "url": "https://docs.google.com/spreadsheets/d/1S6HWr6KyVuRkgyG-liYmGA1gGTtKWCFr2qwP1sZPDoc/export?format=csv",
+  "contact_into": null,
+  "handler": {
+    "Csv": {
+      "delimiter": 44,
+      "headers": true
+    }
+  },
+  "filters": [],
+  "record_path": null,
+  "pubkey_path": "$.c1",
+  "reason_path": null,
+  "name_path": "$.c0"
+}
