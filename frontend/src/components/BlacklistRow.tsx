@@ -4,9 +4,10 @@ import { SourceBadge } from './SourceBadge'
 
 interface Props {
   entry: BlacklistEntry
+  onValidatorClick?: (pubkey: string) => void
 }
 
-export function BlacklistRow({ entry }: Props) {
+export function BlacklistRow({ entry, onValidatorClick }: Props) {
   const reasons = entry.sources
     .filter((s) => s.reason)
     .map((s) => s.reason!)
@@ -14,10 +15,25 @@ export function BlacklistRow({ entry }: Props) {
   return (
     <tr className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300">
       <td className="px-5 py-3 text-[0.82rem] text-text-primary truncate" title={entry.name ?? undefined}>
-        {entry.name ?? <span className="text-text-muted">—</span>}
+        {onValidatorClick ? (
+          <button
+            onClick={() => onValidatorClick(entry.pubkey)}
+            className="hover:text-accent-green transition-colors text-left truncate block w-full"
+          >
+            {entry.name ?? <span className="text-text-muted">—</span>}
+          </button>
+        ) : (
+          entry.name ?? <span className="text-text-muted">—</span>
+        )}
       </td>
       <td className="px-5 py-3">
-        <PubkeyCell pubkey={entry.pubkey} />
+        {onValidatorClick ? (
+          <button onClick={() => onValidatorClick(entry.pubkey)} className="hover:opacity-80 transition-opacity">
+            <PubkeyCell pubkey={entry.pubkey} />
+          </button>
+        ) : (
+          <PubkeyCell pubkey={entry.pubkey} />
+        )}
       </td>
       <td className="px-5 py-3">
         <div className="flex flex-wrap gap-1.5">

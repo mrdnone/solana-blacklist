@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import type { BlacklistEntry } from './api/types'
 import { BlacklistTable } from './components/BlacklistTable'
+import { EpochDetail } from './components/EpochDetail'
+import { EpochList } from './components/EpochList'
 import { ErrorBanner } from './components/ErrorBanner'
 import { Header } from './components/Header'
 import { PubkeyLookup } from './components/PubkeyLookup'
@@ -9,9 +11,13 @@ import { Stars } from './components/Stars'
 import { StatsBar } from './components/StatsBar'
 import { SuggestSource } from './components/SuggestSource'
 import { TableSearch } from './components/TableSearch'
+import { ValidatorDetail } from './components/ValidatorDetail'
 import { useBlacklist } from './hooks/useBlacklist'
+import { useEpochDetail } from './hooks/useEpochDetail'
+import { useEpochs } from './hooks/useEpochs'
 import { usePubkeyLookup } from './hooks/usePubkeyLookup'
 import { useSources } from './hooks/useSources'
+import { useValidatorDetail } from './hooks/useValidatorDetail'
 
 function filterEntries(
   entries: BlacklistEntry[],
@@ -39,14 +45,19 @@ function filterEntries(
   return result
 }
 
-type Page = 'home' | 'suggest-source'
+type Page =
+  | { kind: 'home' }
+  | { kind: 'suggest-source' }
+  | { kind: 'validator'; pubkey: string }
+  | { kind: 'epochs' }
+  | { kind: 'epoch-detail'; epoch: number }
 
 export default function App() {
   const { sourceNames } = useSources()
   const { data, isLoading, error, fetchedAt, refetch } = useBlacklist()
   const pubkeyLookup = usePubkeyLookup()
 
-  const [page, setPage] = useState<Page>('home')
+  const [page, setPage] = useState<Page>({ kind: 'home' })
   const [activeSource, setActiveSource] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearch = useDeferredValue(searchQuery)
@@ -58,16 +69,70 @@ export default function App() {
     [data?.entries, activeSource, deferredSearch],
   )
 
-  return (
-    <div className="relative min-h-screen">
-      <Stars />
+  // Validator detail hook
+  const validatorPubkey = page.kind === 'validator' ? page.pubkey : null
+  const validatorDetail = useValidatorDetail(validatorPubkey)
 
-      <div className="relative z-10">
-        <Header onSuggestSource={() => setPage('suggest-source')} />
+  // Epochs hook
+  const epochs = useEpochs()
 
-        {page === 'suggest-source' ? (
-          <SuggestSource onBack={() => setPage('home')} />
-        ) : (
+  // Epoch detail hook
+  const epochNumber = page.kind === 'epoch-detail' ? page.epoch : null
+  const epochDetail = useEpochDetail(epochNumber)
+
+  const navigateToValidator = (pubkey: string) => setPage({ kind: 'validator', pubkey })
+  const navigateToEpochs = () => setPage({ kind: 'epochs' })
+  const navigateToEpochDetail = (epoch: number) => setPage({ kind: 'epoch-detail', epoch })
+  const navigateHome = () => setPage({ kind: 'home' })
+
+  const renderPage = () => {
+    switch (page.kind) {
+      case 'suggest-source':
+        return <SuggestSource onBack={navigateHome} />
+
+      case 'validator':
+        return (
+          <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+            <ValidatorDetail
+              data={validatorDetail.data}
+              isLoading={validatorDetail.isLoading}
+              error={validatorDetail.error}
+              onBack={navigateHome}
+              onEpochClick={navigateToEpochDetail}
+            />
+          </main>
+        )
+
+      case 'epochs':
+        return (
+          <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+            <EpochList
+              data={epochs.data}
+              isLoading={epochs.isLoading}
+              error={epochs.error}
+              onBack={navigateHome}
+              onEpochClick={navigateToEpochDetail}
+            />
+          </main>
+        )
+
+      case 'epoch-detail':
+        return (
+          <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+            <EpochDetail
+              epoch={page.epoch}
+              data={epochDetail.data}
+              isLoading={epochDetail.isLoading}
+              error={epochDetail.error}
+              onBack={navigateToEpochs}
+              onValidatorClick={navigateToValidator}
+            />
+          </main>
+        )
+
+      case 'home':
+      default:
+        return (
           <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10 space-y-7">
             {/* Stats */}
             <StatsBar
@@ -107,6 +172,7 @@ export default function App() {
                 isLoading={isLoading}
                 isFirstLoad={isFirstLoad}
                 totalCount={data?.unique_pubkeys ?? null}
+                onValidatorClick={navigateToValidator}
               />
             )}
 
@@ -118,7 +184,21 @@ export default function App() {
               />
             )}
           </main>
-        )}
+        )
+    }
+  }
+
+  return (
+    <div className="relative min-h-screen">
+      <Stars />
+
+      <div className="relative z-10">
+        <Header
+          onSuggestSource={() => setPage({ kind: 'suggest-source' })}
+          onEpochs={navigateToEpochs}
+        />
+
+        {renderPage()}
 
         {/* Footer */}
         <footer className="border-t border-white/[0.04] py-8 mt-10 space-y-4">

@@ -34,3 +34,74 @@ export interface SourceConfig {
 }
 
 export type SourcesResponse = Record<string, SourceConfig>
+
+// ── Validator detail ─────────────────────────────────────────────────────────
+
+export interface ValidatorMeta {
+  vote_identity: string
+  identity?: string
+  name?: string
+  delinquent?: boolean
+  activated_stake?: number
+  commission?: number
+  skip_rate?: number
+  uptime?: number
+  version?: string
+  wiz_score?: number
+  apy_estimate?: number
+  ip_country?: string
+  image?: string
+  website?: string
+  updated_at: string
+  node_pubkey?: string
+  activated_stake_lamports?: number
+  last_vote?: number
+  root_slot?: number
+  epoch_credits?: number
+  prev_epoch_credits?: number
+}
+
+export interface ValidatorEpochSnapshot {
+  vote_identity: string
+  epoch: number
+  node_pubkey?: string
+  activated_stake_lamports?: number
+  commission?: number
+  is_delinquent: boolean
+  epoch_credits?: number
+  prev_epoch_credits?: number
+  last_vote?: number
+  root_slot?: number
+  name?: string
+  skip_rate?: number
+  uptime?: number
+  version?: string
+  wiz_score?: number
+  apy_estimate?: number
+  ip_country?: string
+  image?: string
+  website?: string
+  snapshotted_at: string
+}
+
+export interface ValidatorDetailResponse {
+  vote_identity: string
+  current: ValidatorMeta | null
+  epochs: ValidatorEpochSnapshot[]
+}
+
+// ── Epoch endpoints ──────────────────────────────────────────────────────────
+
+export interface EpochSummary {
+  epoch: number
+  validator_count: number
+  total_stake_lamports?: number
+  avg_commission?: number
+  snapshotted_at: string
+}
+
+export interface EpochDetailResponse {
+  epoch: number
+  validator_count: number
+  validators: ValidatorEpochSnapshot[]
+}

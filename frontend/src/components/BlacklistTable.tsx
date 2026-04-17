@@ -11,9 +11,10 @@ interface Props {
   isLoading: boolean
   isFirstLoad: boolean
   totalCount: number | null
+  onValidatorClick?: (pubkey: string) => void
 }
 
-export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount }: Props) {
+export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, onValidatorClick }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
@@ -97,6 +98,7 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount }: 
                   <BlacklistRow
                     key={entries[virtualRow.index].pubkey}
                     entry={entries[virtualRow.index]}
+                    onValidatorClick={onValidatorClick}
                   />
                 ))}
 
