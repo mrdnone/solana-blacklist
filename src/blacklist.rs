@@ -128,9 +128,10 @@ impl BlacklistCollector {
             })
             .collect::<Vec<_>>();
 
-        // Fetch active validators (RPC + Stakewiz) concurrently
-        let (rpc_set, stakewiz_map) = tokio::join!(
-            fetch_active_vote_pubkeys(&client, &self.opts.solana_rpc_url),
+        // Fetch active validators (RPC + Stakewiz) and epoch info concurrently
+        let (epoch_info, (rpc_set, current_accounts, delinquent_accounts), stakewiz_map) = tokio::join!(
+            fetch_epoch_info(&client, &self.opts.solana_rpc_url),
+            fetch_vote_accounts(&client, &self.opts.solana_rpc_url),
             fetch_stakewiz_validators(&client),
         );
 
@@ -153,12 +154,61 @@ impl BlacklistCollector {
             .as_ref()
             .and_then(|db_path| crate::persistence::FirstSeenStore::open(db_path).ok());
 
-        // Upsert Stakewiz metadata into the validators table
+        // Upsert Stakewiz metadata (enriched with RPC fields) into the validators table
         if let Some(ref store) = store {
             if !stakewiz_map.is_empty() {
-                let metas: Vec<ValidatorMeta> = stakewiz_map.values().cloned().collect();
+                // Build a lookup from vote_pubkey -> RpcVoteAccount for merging
+                let all_rpc: HashMap<&str, &RpcVoteAccount> = current_accounts
+                    .iter()
+                    .chain(delinquent_accounts.iter())
+                    .map(|a| (a.vote_pubkey.as_str(), a))
+                    .collect();
+
+                let metas: Vec<ValidatorMeta> = stakewiz_map
+                    .values()
+                    .cloned()
+                    .map(|mut m| {
+                        if let Some(rpc_acc) = all_rpc.get(m.vote_identity.as_str()) {
+                            m.node_pubkey = Some(rpc_acc.node_pubkey.clone());
+                            m.activated_stake_lamports = Some(rpc_acc.activated_stake);
+                            m.last_vote = Some(rpc_acc.last_vote);
+                            m.root_slot = Some(rpc_acc.root_slot);
+                            if let Some(last) = rpc_acc.epoch_credits.last() {
+                                m.epoch_credits = Some(last[1]);
+                                m.prev_epoch_credits = Some(last[2]);
+                            }
+                        }
+                        m
+                    })
+                    .collect();
                 if let Err(err) = store.upsert_validators(&metas) {
                     eprintln!("[persistence] Failed to upsert validators: {err:#}");
+                }
+            }
+        }
+
+        // Epoch snapshot: store once per epoch boundary
+        if let (Some(store), Some(epoch_info)) = (&store, &epoch_info) {
+            let current_epoch = epoch_info.epoch;
+            let last_epoch = store.get_last_stored_epoch().unwrap_or(None);
+
+            if last_epoch.is_none_or(|last| current_epoch > last) {
+                let snapshots = build_epoch_snapshots(
+                    current_epoch,
+                    &current_accounts,
+                    &delinquent_accounts,
+                    &stakewiz_map,
+                );
+                match store.insert_epoch_snapshots(&snapshots) {
+                    Ok(_) => {
+                        println!(
+                            "[epoch-snapshot] Stored {} snapshots for epoch {}",
+                            snapshots.len(),
+                            current_epoch
+                        );
+                        let _ = store.set_last_stored_epoch(current_epoch);
+                    }
+                    Err(err) => eprintln!("[epoch-snapshot] Failed to store snapshots: {err:#}"),
                 }
             }
         }
@@ -580,6 +630,24 @@ fn node_to_string(v: &'_ Value) -> Cow<'_, str> {
     }
 }
 
+// ── RPC types for getEpochInfo ───────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct RpcEpochInfoResponse {
+    result: RpcEpochInfo,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcEpochInfo {
+    pub epoch: u64,
+    pub slot_index: u64,
+    pub slots_in_epoch: u64,
+    pub absolute_slot: u64,
+    pub block_height: Option<u64>,
+    pub transaction_count: Option<u64>,
+}
+
 // ── RPC types for getVoteAccounts ────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -593,15 +661,62 @@ struct RpcVoteAccountsResult {
     delinquent: Vec<RpcVoteAccount>,
 }
 
-#[derive(Deserialize)]
-struct RpcVoteAccount {
-    #[serde(rename = "votePubkey")]
-    vote_pubkey: String,
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcVoteAccount {
+    pub vote_pubkey: String,
+    pub node_pubkey: String,
+    pub activated_stake: u64,
+    pub commission: u8,
+    pub epoch_vote_account: bool,
+    pub epoch_credits: Vec<[u64; 3]>,
+    pub last_vote: u64,
+    pub root_slot: u64,
 }
 
-/// Fetch all active vote pubkeys (current + delinquent) from the Solana RPC.
-/// Returns an empty set on any error (non-fatal: the caller skips the filter).
-async fn fetch_active_vote_pubkeys(client: &Client, rpc_url: &str) -> HashSet<String> {
+/// Fetch epoch info from the Solana RPC. Returns None on error (non-fatal).
+async fn fetch_epoch_info(client: &Client, rpc_url: &str) -> Option<RpcEpochInfo> {
+    let body = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getEpochInfo",
+        "params": []
+    });
+
+    let result = async {
+        let resp = client
+            .post(rpc_url)
+            .json(&body)
+            .send()
+            .await
+            .context("getEpochInfo request failed")?;
+        if !resp.status().is_success() {
+            return Err(anyhow!("getEpochInfo HTTP {}", resp.status().as_u16()));
+        }
+        let parsed: RpcEpochInfoResponse = resp.json().await.context("getEpochInfo parse failed")?;
+        Ok(parsed.result)
+    }
+    .await;
+
+    match result {
+        Ok(info) => {
+            println!("[epoch-info] Current epoch: {}", info.epoch);
+            Some(info)
+        }
+        Err(err) => {
+            eprintln!("[epoch-info] Failed to fetch epoch info: {err:#}");
+            None
+        }
+    }
+}
+
+/// Fetch all vote accounts (current + delinquent) from the Solana RPC.
+/// Returns (active pubkey set, current accounts, delinquent accounts).
+/// On error, returns empty set and empty vecs.
+async fn fetch_vote_accounts(
+    client: &Client,
+    rpc_url: &str,
+) -> (HashSet<String>, Vec<RpcVoteAccount>, Vec<RpcVoteAccount>) {
     let body = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -624,29 +739,83 @@ async fn fetch_active_vote_pubkeys(client: &Client, rpc_url: &str) -> HashSet<St
         let parsed: RpcVoteAccountsResponse = resp.json().await.context("RPC parse failed")?;
         let mut set =
             HashSet::with_capacity(parsed.result.current.len() + parsed.result.delinquent.len());
-        for v in parsed.result.current {
-            set.insert(v.vote_pubkey);
+        for v in &parsed.result.current {
+            set.insert(v.vote_pubkey.clone());
         }
-        for v in parsed.result.delinquent {
-            set.insert(v.vote_pubkey);
+        for v in &parsed.result.delinquent {
+            set.insert(v.vote_pubkey.clone());
         }
-        Ok(set)
+        Ok((set, parsed.result.current, parsed.result.delinquent))
     }
     .await;
 
     match result {
-        Ok(set) => {
+        Ok((set, current, delinquent)) => {
             println!(
                 "[active-filter] RPC returned {} active vote accounts",
                 set.len()
             );
-            set
+            (set, current, delinquent)
         }
         Err(err) => {
             eprintln!("[active-filter] RPC fetch failed, skipping filter: {err:#}");
-            HashSet::new()
+            (HashSet::new(), Vec::new(), Vec::new())
         }
     }
+}
+
+/// Build epoch snapshots by merging RPC vote account data with Stakewiz metadata.
+fn build_epoch_snapshots(
+    epoch: u64,
+    current: &[RpcVoteAccount],
+    delinquent: &[RpcVoteAccount],
+    stakewiz: &HashMap<String, ValidatorMeta>,
+) -> Vec<crate::persistence::ValidatorEpochSnapshot> {
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let mut snapshots = Vec::with_capacity(current.len() + delinquent.len());
+
+    for (accounts, is_delinquent) in [(current, false), (delinquent, true)] {
+        for acc in accounts {
+            // Extract epoch_credits from the last entry matching this epoch,
+            // or fall back to the very last entry
+            let (ec, pec) = acc
+                .epoch_credits
+                .iter()
+                .rev()
+                .find(|e| e[0] == epoch)
+                .or_else(|| acc.epoch_credits.last())
+                .map(|e| (Some(e[1]), Some(e[2])))
+                .unwrap_or((None, None));
+
+            let swiz = stakewiz.get(&acc.vote_pubkey);
+
+            snapshots.push(crate::persistence::ValidatorEpochSnapshot {
+                vote_identity: acc.vote_pubkey.clone(),
+                epoch,
+                node_pubkey: Some(acc.node_pubkey.clone()),
+                activated_stake_lamports: Some(acc.activated_stake),
+                commission: Some(acc.commission as f64),
+                is_delinquent,
+                epoch_credits: ec,
+                prev_epoch_credits: pec,
+                last_vote: Some(acc.last_vote),
+                root_slot: Some(acc.root_slot),
+                name: swiz.and_then(|s| s.name.clone()),
+                skip_rate: swiz.and_then(|s| s.skip_rate),
+                uptime: swiz.and_then(|s| s.uptime),
+                version: swiz.and_then(|s| s.version.clone()),
+                wiz_score: swiz.and_then(|s| s.wiz_score),
+                apy_estimate: swiz.and_then(|s| s.apy_estimate),
+                ip_country: swiz.and_then(|s| s.ip_country.clone()),
+                image: swiz.and_then(|s| s.image.clone()),
+                website: swiz.and_then(|s| s.website.clone()),
+                snapshotted_at: now.clone(),
+            });
+        }
+    }
+
+    snapshots
 }
 
 // ── Stakewiz types ───────────────────────────────────────────────────────────
@@ -708,6 +877,12 @@ async fn fetch_stakewiz_validators(client: &Client) -> HashMap<String, Validator
                     image: r.image,
                     website: r.website,
                     updated_at: now.clone(),
+                    node_pubkey: None,
+                    activated_stake_lamports: None,
+                    last_vote: None,
+                    root_slot: None,
+                    epoch_credits: None,
+                    prev_epoch_credits: None,
                 },
             );
         }
@@ -1233,20 +1408,42 @@ mod tests {
 
     #[tokio::test]
     #[ignore]
-    async fn test_fetch_active_vote_pubkeys() {
+    async fn test_fetch_vote_accounts() {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
             .unwrap();
-        let set = fetch_active_vote_pubkeys(&client, "https://api.mainnet-beta.solana.com").await;
+        let (set, current, delinquent) =
+            fetch_vote_accounts(&client, "https://api.mainnet-beta.solana.com").await;
         assert!(
             !set.is_empty(),
             "RPC should return non-empty set of vote pubkeys"
         );
+        assert!(!current.is_empty(), "should have current accounts");
+        // Verify expanded fields are present
+        let first = &current[0];
+        assert!(!first.node_pubkey.is_empty());
+        assert!(first.activated_stake > 0 || !delinquent.is_empty());
         println!(
-            "[test] fetch_active_vote_pubkeys returned {} pubkeys",
-            set.len()
+            "[test] fetch_vote_accounts returned {} current + {} delinquent",
+            current.len(),
+            delinquent.len()
         );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_fetch_epoch_info() {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+        let info =
+            fetch_epoch_info(&client, "https://api.mainnet-beta.solana.com").await;
+        assert!(info.is_some(), "should fetch epoch info");
+        let info = info.unwrap();
+        assert!(info.epoch > 0, "epoch should be > 0");
+        println!("[test] epoch={}, slot_index={}", info.epoch, info.slot_index);
     }
 
     #[tokio::test]
@@ -1307,5 +1504,84 @@ mod tests {
             filtered.unique_pubkeys,
             unfiltered.unique_pubkeys
         );
+    }
+
+    fn make_rpc_vote_account(vote_pubkey: &str, epoch_credits: Vec<[u64; 3]>) -> RpcVoteAccount {
+        RpcVoteAccount {
+            vote_pubkey: vote_pubkey.to_string(),
+            node_pubkey: "NodePK123".to_string(),
+            activated_stake: 5_000_000_000,
+            commission: 8,
+            epoch_vote_account: true,
+            epoch_credits,
+            last_vote: 299888765,
+            root_slot: 299888734,
+        }
+    }
+
+    #[test]
+    fn test_build_epoch_snapshots_credits_extraction() {
+        let acc = make_rpc_vote_account("AAA111", vec![[748, 400000, 398000], [749, 420000, 400000], [750, 432000, 420000]]);
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new());
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].epoch_credits, Some(432000));
+        assert_eq!(snapshots[0].prev_epoch_credits, Some(420000));
+    }
+
+    #[test]
+    fn test_build_epoch_snapshots_delinquent_flag() {
+        let current = make_rpc_vote_account("AAA111", vec![[750, 100, 90]]);
+        let delinquent = make_rpc_vote_account("BBB222", vec![[750, 50, 40]]);
+        let snapshots = build_epoch_snapshots(750, &[current], &[delinquent], &HashMap::new());
+        assert_eq!(snapshots.len(), 2);
+        assert!(!snapshots[0].is_delinquent);
+        assert!(snapshots[1].is_delinquent);
+    }
+
+    #[test]
+    fn test_build_epoch_snapshots_stakewiz_merge() {
+        let acc = make_rpc_vote_account("AAA111", vec![[750, 100, 90]]);
+        let mut swiz = HashMap::new();
+        swiz.insert(
+            "AAA111".to_string(),
+            ValidatorMeta {
+                vote_identity: "AAA111".to_string(),
+                identity: None,
+                name: Some("My Validator".to_string()),
+                delinquent: None,
+                activated_stake: None,
+                commission: None,
+                skip_rate: Some(0.5),
+                uptime: Some(99.9),
+                version: Some("2.2.0".to_string()),
+                wiz_score: Some(8.5),
+                apy_estimate: Some(7.2),
+                ip_country: Some("US".to_string()),
+                image: None,
+                website: None,
+                updated_at: String::new(),
+                node_pubkey: None,
+                activated_stake_lamports: None,
+                last_vote: None,
+                root_slot: None,
+                epoch_credits: None,
+                prev_epoch_credits: None,
+            },
+        );
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &swiz);
+        assert_eq!(snapshots[0].name, Some("My Validator".to_string()));
+        assert_eq!(snapshots[0].skip_rate, Some(0.5));
+        assert_eq!(snapshots[0].wiz_score, Some(8.5));
+    }
+
+    #[test]
+    fn test_build_epoch_snapshots_stakewiz_missing() {
+        let acc = make_rpc_vote_account("AAA111", vec![[750, 100, 90]]);
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new());
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].name, None);
+        assert_eq!(snapshots[0].skip_rate, None);
+        // RPC fields should still be present
+        assert_eq!(snapshots[0].activated_stake_lamports, Some(5_000_000_000));
     }
 }

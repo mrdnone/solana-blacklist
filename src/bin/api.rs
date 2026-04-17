@@ -26,6 +26,7 @@ use solana_blacklist::blacklist::{
 struct AppState {
     sources: HashMap<String, BlacklistSource>,
     cache: Arc<RwLock<Option<BlacklistResult>>>,
+    db_path: PathBuf,
 }
 
 // ── Error handling ────────────────────────────────────────────────────────────
@@ -138,6 +139,62 @@ async fn get_pubkey(
     }
 }
 
+// ── Validator detail endpoint ────────────────────────────────────────────────
+
+async fn get_validator_detail(
+    State(state): State<AppState>,
+    Path(pubkey): Path<String>,
+) -> ApiResult<Response> {
+    if let Err(reason) = solana_blacklist::utils::validate_solana_pubkey(&pubkey) {
+        let body = json!({ "error": format!("invalid pubkey: {}", reason) });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let current = store.get_validator(&pubkey)?;
+    let epochs = store.get_validator_epochs(&pubkey)?;
+
+    if current.is_none() && epochs.is_empty() {
+        let body = json!({ "error": "validator not found" });
+        return Ok((StatusCode::NOT_FOUND, Json(body)).into_response());
+    }
+
+    let body = json!({
+        "vote_identity": pubkey,
+        "current": current,
+        "epochs": epochs,
+    });
+    Ok(Json(body).into_response())
+}
+
+// ── Epoch endpoints ──────────────────────────────────────────────────────────
+
+async fn list_epochs(State(state): State<AppState>) -> ApiResult<Response> {
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let epochs = store.list_stored_epochs()?;
+    Ok(Json(json!(epochs)).into_response())
+}
+
+async fn get_epoch_detail(
+    State(state): State<AppState>,
+    Path(epoch): Path<u64>,
+) -> ApiResult<Response> {
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let validators = store.get_epoch_snapshots(epoch)?;
+
+    if validators.is_empty() {
+        let body = json!({ "error": format!("no data for epoch {}", epoch) });
+        return Ok((StatusCode::NOT_FOUND, Json(body)).into_response());
+    }
+
+    let body = json!({
+        "epoch": epoch,
+        "validator_count": validators.len(),
+        "validators": validators,
+    });
+    Ok(Json(body).into_response())
+}
+
 // ── Background collector ─────────────────────────────────────────────────────
 
 fn build_collector(sources: HashMap<String, BlacklistSource>) -> BlacklistCollector {
@@ -193,6 +250,10 @@ async fn main() {
     let sources = default_blacklist_sources();
     let cache: Arc<RwLock<Option<BlacklistResult>>> = Arc::new(RwLock::new(None));
 
+    let db_path = std::env::var("BLACKLIST_DB_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("./blacklist.db"));
+
     let refresh_secs: u64 = std::env::var("BLACKLIST_REFRESH_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -217,7 +278,11 @@ async fn main() {
     // Spawn background refresh loop
     spawn_background_collector(sources.clone(), cache.clone(), refresh_secs);
 
-    let state = AppState { sources, cache };
+    let state = AppState {
+        sources,
+        cache,
+        db_path,
+    };
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -228,6 +293,9 @@ async fn main() {
         .route("/sources", get(list_sources))
         .route("/blacklist", get(get_blacklist))
         .route("/blacklist/{pubkey}", get(get_pubkey))
+        .route("/validators/{pubkey}", get(get_validator_detail))
+        .route("/epochs", get(list_epochs))
+        .route("/epochs/{epoch}", get(get_epoch_detail))
         .layer(cors)
         .with_state(state);
 
