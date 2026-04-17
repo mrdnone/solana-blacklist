@@ -7,7 +7,7 @@ use axum::{
     Router,
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Json, Response},
+    response::{IntoResponse, Json, Response},
     routing::{get, post},
 };
 use serde::Deserialize;
@@ -356,9 +356,6 @@ async fn vote_detail(
     .into_response())
 }
 
-async fn meridian_ui() -> Html<&'static str> {
-    Html(include_str!("../static/meridian.html"))
-}
 
 async fn meridian_info() -> impl IntoResponse {
     Json(json!({
@@ -488,7 +485,7 @@ async fn main() {
         .route("/epochs/{epoch}", get(get_epoch_detail))
         .route("/votes", post(vote_submit).get(votes_list))
         .route("/votes/{target}", get(vote_detail))
-        .route("/meridian", get(meridian_ui))
+
         .route("/meridian/info", get(meridian_info))
         .layer(cors)
         .with_state(state);
