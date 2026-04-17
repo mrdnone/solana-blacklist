@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { HttpError } from '../api/client'
 import { lookupPubkey as apiLookup } from '../api/endpoints'
 import type { PubkeyLookupResult } from '../api/types'
 import { BASE58_RE } from '../lib/constants'
@@ -30,14 +29,8 @@ export function usePubkeyLookup() {
         setIsLoading(false)
       })
       .catch((err) => {
-        if (err instanceof HttpError && err.status === 404) {
-          // 404 means "not blacklisted" — that's a valid result, not an error
-          setResult({ pubkey: trimmed, blacklisted: false, sources: [] })
-          setIsLoading(false)
-        } else {
-          setError(err.message)
-          setIsLoading(false)
-        }
+        setError(err.message)
+        setIsLoading(false)
       })
   }, [])
 

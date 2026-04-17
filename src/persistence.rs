@@ -307,15 +307,45 @@ impl FirstSeenStore {
         Ok(result)
     }
 
-    pub fn get_epoch_snapshots(&self, epoch: u64) -> Result<Vec<ValidatorEpochSnapshot>> {
-        let mut stmt = self.conn.prepare(
+    pub fn get_epoch_snapshots(
+        &self,
+        epoch: u64,
+        query: Option<&str>,
+        delinquent: Option<bool>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ValidatorEpochSnapshot>> {
+        let mut extra_where = String::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 2u32; // ?1 is epoch
+
+        if let Some(q) = query.filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            extra_where.push_str(&format!(" AND (vote_identity LIKE ?{idx} OR name LIKE ?{idx} OR node_pubkey LIKE ?{idx})"));
+            params.push(Box::new(pattern));
+            idx += 1;
+        }
+        if let Some(d) = delinquent {
+            extra_where.push_str(&format!(" AND is_delinquent = ?{idx}"));
+            params.push(Box::new(d as i32));
+            #[allow(unused_assignments)]
+            { idx += 1; }
+        }
+
+        let sql = format!(
             "SELECT vote_identity, epoch, node_pubkey, activated_stake_lamports,
                     commission, is_delinquent, epoch_credits, prev_epoch_credits,
                     last_vote, root_slot, name, skip_rate, uptime, version,
                     wiz_score, apy_estimate, ip_country, image, website, snapshotted_at
-             FROM validator_epochs WHERE epoch = ?1 ORDER BY vote_identity",
-        )?;
-        let rows = stmt.query_map(rusqlite::params![epoch], |row| {
+             FROM validator_epochs WHERE epoch = ?1{} ORDER BY activated_stake_lamports DESC NULLS LAST, vote_identity ASC
+             LIMIT {} OFFSET {}",
+            extra_where, limit, offset
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(epoch)];
+        all_params.extend(params);
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
             Ok(ValidatorEpochSnapshot {
                 vote_identity: row.get(0)?,
                 epoch: row.get(1)?,
@@ -344,6 +374,32 @@ impl FirstSeenStore {
             result.push(row?);
         }
         Ok(result)
+    }
+
+    pub fn count_epoch_snapshots(&self, epoch: u64, query: Option<&str>, delinquent: Option<bool>) -> Result<u64> {
+        let mut extra_where = String::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 2u32;
+
+        if let Some(q) = query.filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            extra_where.push_str(&format!(" AND (vote_identity LIKE ?{idx} OR name LIKE ?{idx} OR node_pubkey LIKE ?{idx})"));
+            params.push(Box::new(pattern));
+            idx += 1;
+        }
+        if let Some(d) = delinquent {
+            extra_where.push_str(&format!(" AND is_delinquent = ?{idx}"));
+            params.push(Box::new(d as i32));
+            #[allow(unused_assignments)]
+            { idx += 1; }
+        }
+
+        let sql = format!("SELECT COUNT(*) FROM validator_epochs WHERE epoch = ?1{}", extra_where);
+        let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(epoch)];
+        all_params.extend(params);
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+        let count: u64 = self.conn.query_row(&sql, param_refs.as_slice(), |row| row.get(0))?;
+        Ok(count)
     }
 
     pub fn list_stored_epochs(&self) -> Result<Vec<EpochSummary>> {
@@ -410,6 +466,113 @@ impl FirstSeenStore {
             })),
             None => Ok(None),
         }
+    }
+
+    // ── Validators list methods ─────────────────────────────────────────────
+
+    pub fn list_validators(
+        &self,
+        query: Option<&str>,
+        delinquent: Option<bool>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ValidatorMeta>> {
+        let mut conditions = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 1u32;
+
+        if let Some(q) = query.filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            conditions.push(format!("(vote_identity LIKE ?{idx} OR name LIKE ?{idx} OR node_pubkey LIKE ?{idx})"));
+            params.push(Box::new(pattern));
+            idx += 1;
+        }
+        if let Some(d) = delinquent {
+            conditions.push(format!("delinquent = ?{idx}"));
+            params.push(Box::new(d));
+            #[allow(unused_assignments)]
+            { idx += 1; }
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", conditions.join(" AND "))
+        };
+
+        let sql = format!(
+            "SELECT vote_identity, identity, name, delinquent, activated_stake,
+                    commission, skip_rate, uptime, version, wiz_score,
+                    apy_estimate, ip_country, image, website, updated_at,
+                    node_pubkey, activated_stake_lamports, last_vote, root_slot,
+                    epoch_credits, prev_epoch_credits
+             FROM validators{} ORDER BY activated_stake_lamports DESC NULLS LAST, vote_identity ASC
+             LIMIT {} OFFSET {}",
+            where_clause, limit, offset
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+            Ok(ValidatorMeta {
+                vote_identity: row.get(0)?,
+                identity: row.get(1)?,
+                name: row.get(2)?,
+                delinquent: row.get::<_, Option<bool>>(3)?,
+                activated_stake: row.get(4)?,
+                commission: row.get(5)?,
+                skip_rate: row.get(6)?,
+                uptime: row.get(7)?,
+                version: row.get(8)?,
+                wiz_score: row.get(9)?,
+                apy_estimate: row.get(10)?,
+                ip_country: row.get(11)?,
+                image: row.get(12)?,
+                website: row.get(13)?,
+                updated_at: row.get(14)?,
+                node_pubkey: row.get(15)?,
+                activated_stake_lamports: row.get(16)?,
+                last_vote: row.get(17)?,
+                root_slot: row.get(18)?,
+                epoch_credits: row.get(19)?,
+                prev_epoch_credits: row.get(20)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    pub fn count_validators(&self, query: Option<&str>, delinquent: Option<bool>) -> Result<u64> {
+        let mut conditions = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        let mut idx = 1u32;
+
+        if let Some(q) = query.filter(|s| !s.is_empty()) {
+            let pattern = format!("%{}%", q);
+            conditions.push(format!("(vote_identity LIKE ?{idx} OR name LIKE ?{idx} OR node_pubkey LIKE ?{idx})"));
+            params.push(Box::new(pattern));
+            idx += 1;
+        }
+        if let Some(d) = delinquent {
+            conditions.push(format!("delinquent = ?{idx}"));
+            params.push(Box::new(d));
+            #[allow(unused_assignments)]
+            { idx += 1; }
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", conditions.join(" AND "))
+        };
+
+        let sql = format!("SELECT COUNT(*) FROM validators{}", where_clause);
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let count: u64 = self.conn.query_row(&sql, param_refs.as_slice(), |row| row.get(0))?;
+        Ok(count)
     }
 
     // ── Meridian voting methods ────────────────────────────────────────────

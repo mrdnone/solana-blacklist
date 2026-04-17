@@ -8,9 +8,10 @@ interface Props {
   isLoading: boolean
   result: PubkeyLookupResult | null
   error: string | null
+  onViewValidator?: (pubkey: string) => void
 }
 
-export function PubkeyLookup({ onLookup, onClear, isLoading, result, error }: Props) {
+export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onViewValidator }: Props) {
   const [input, setInput] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -97,9 +98,21 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error }: Pr
           )}
 
           {!result.blacklisted && (
-            <p className="mt-3 text-[0.78rem] text-text-muted">
-              This address was not found in any blacklist source.
-            </p>
+            <div className="mt-3 flex items-center gap-4">
+              <p className="text-[0.78rem] text-text-muted">
+                {result.in_validators_db
+                  ? 'Not blacklisted — known active validator.'
+                  : 'This address was not found in any blacklist source.'}
+              </p>
+              {result.in_validators_db && onViewValidator && (
+                <button
+                  onClick={() => onViewValidator(result.pubkey)}
+                  className="rounded-full border border-accent-green/25 px-4 py-1.5 text-[0.72rem] tracking-[2px] uppercase font-mono text-accent-green hover:bg-accent-green/10 hover:border-accent-green/40 transition-all duration-300 whitespace-nowrap"
+                >
+                  View Validator Details &rarr;
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

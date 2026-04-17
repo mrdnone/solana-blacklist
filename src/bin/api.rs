@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::{
@@ -19,6 +19,7 @@ use solana_blacklist::blacklist::{
     BlacklistCollector, BlacklistOptions, BlacklistResult, BlacklistSource,
     default_blacklist_sources,
 };
+use solana_blacklist::persistence::FirstSeenStore;
 
 // ── Shared application state ──────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ use solana_blacklist::blacklist::{
 struct AppState {
     sources: HashMap<String, BlacklistSource>,
     cache: Arc<RwLock<Option<BlacklistResult>>>,
-    db_path: PathBuf,
+    store: Arc<Mutex<FirstSeenStore>>,
 }
 
 // ── Error handling ────────────────────────────────────────────────────────────
@@ -58,7 +59,16 @@ struct BlacklistQuery {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async fn list_sources(State(state): State<AppState>) -> impl IntoResponse {
-    Json(json!(state.sources))
+    let mut sources = serde_json::to_value(&state.sources).unwrap();
+    // Include meridian as a known source even though it's not in the static .json config
+    if let serde_json::Value::Object(ref mut map) = sources {
+        map.entry(solana_blacklist::meridian::MERIDIAN_SOURCE_NAME.to_string())
+            .or_insert_with(|| json!({
+                "name": solana_blacklist::meridian::MERIDIAN_SOURCE_NAME,
+                "description": "Community-voted blacklist via Meridian validator voting",
+            }));
+    }
+    Json(sources)
 }
 
 async fn get_blacklist(
@@ -74,10 +84,18 @@ async fn get_blacklist(
 
     // If a source filter is given, filter entries client-side from the cached data
     if let Some(ref name) = params.source {
-        if !state.sources.contains_key(name) {
+        let available: Vec<String> = result
+            .entries
+            .iter()
+            .flat_map(|e| e.sources.iter().map(|s| s.name.clone()))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        if !available.iter().any(|s| s == name) {
             let body = json!({
                 "error": format!("source '{}' not found", name),
-                "available": state.sources.keys().collect::<Vec<_>>()
+                "available": available
             });
             return Ok((StatusCode::NOT_FOUND, Json(body)).into_response());
         }
@@ -125,18 +143,51 @@ async fn get_pubkey(
                 "name": &entry.name,
                 "first_seen": &entry.first_seen,
                 "sources": &entry.sources,
+                "in_validators_db": true,
             });
             Ok(Json(body).into_response())
         }
         None => {
+            let in_db = state.store.lock().unwrap().validator_exists(&pubkey).unwrap_or(false);
             let body = json!({
                 "pubkey": pubkey,
                 "blacklisted": false,
                 "sources": [],
+                "in_validators_db": in_db,
             });
-            Ok((StatusCode::NOT_FOUND, Json(body)).into_response())
+            Ok(Json(body).into_response())
         }
     }
+}
+
+// ── Validators list endpoint ─────────────────────────────────────────────────
+
+#[derive(Deserialize, Default)]
+struct ValidatorsQuery {
+    q: Option<String>,
+    delinquent: Option<bool>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_validators(
+    State(state): State<AppState>,
+    Query(params): Query<ValidatorsQuery>,
+) -> ApiResult<impl IntoResponse> {
+    let limit = params.limit.unwrap_or(50).min(500);
+    let offset = params.offset.unwrap_or(0);
+    let q = params.q.as_deref();
+
+    let store = state.store.lock().unwrap();
+    let validators = store.list_validators(q, params.delinquent, limit, offset)?;
+    let total = store.count_validators(q, params.delinquent)?;
+
+    Ok(Json(json!({
+        "validators": validators,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    })))
 }
 
 // ── Validator detail endpoint ────────────────────────────────────────────────
@@ -150,7 +201,7 @@ async fn get_validator_detail(
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let store = state.store.lock().unwrap();
     let current = store.get_validator(&pubkey)?;
     let epochs = store.get_validator_epochs(&pubkey)?;
 
@@ -170,27 +221,45 @@ async fn get_validator_detail(
 // ── Epoch endpoints ──────────────────────────────────────────────────────────
 
 async fn list_epochs(State(state): State<AppState>) -> ApiResult<Response> {
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let store = state.store.lock().unwrap();
     let epochs = store.list_stored_epochs()?;
     Ok(Json(json!(epochs)).into_response())
+}
+
+#[derive(Deserialize, Default)]
+struct EpochDetailQuery {
+    q: Option<String>,
+    delinquent: Option<bool>,
+    limit: Option<u32>,
+    offset: Option<u32>,
 }
 
 async fn get_epoch_detail(
     State(state): State<AppState>,
     Path(epoch): Path<u64>,
+    Query(params): Query<EpochDetailQuery>,
 ) -> ApiResult<Response> {
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
-    let validators = store.get_epoch_snapshots(epoch)?;
+    let limit = params.limit.unwrap_or(50).min(500);
+    let offset = params.offset.unwrap_or(0);
+    let q = params.q.as_deref();
 
-    if validators.is_empty() {
+    let store = state.store.lock().unwrap();
+    let total = store.count_epoch_snapshots(epoch, q, params.delinquent)?;
+
+    if total == 0 && offset == 0 && q.is_none() && params.delinquent.is_none() {
         let body = json!({ "error": format!("no data for epoch {}", epoch) });
         return Ok((StatusCode::NOT_FOUND, Json(body)).into_response());
     }
 
+    let validators = store.get_epoch_snapshots(epoch, q, params.delinquent, limit, offset)?;
+
     let body = json!({
         "epoch": epoch,
-        "validator_count": validators.len(),
+        "validator_count": total,
         "validators": validators,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     });
     Ok(Json(body).into_response())
 }
@@ -211,7 +280,7 @@ async fn vote_submit(
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let store = state.store.lock().unwrap();
 
     // Voter must be a known validator
     let resolved = store.find_vote_identity_for(&req.voter_identity)?;
@@ -254,7 +323,7 @@ async fn vote_submit(
 }
 
 async fn votes_list(State(state): State<AppState>) -> ApiResult<Response> {
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let store = state.store.lock().unwrap();
     let targets = store.list_vote_targets()?;
     Ok(Json(json!({
         "threshold": solana_blacklist::meridian::VOTE_THRESHOLD,
@@ -272,7 +341,7 @@ async fn vote_detail(
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
-    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let store = state.store.lock().unwrap();
     let votes = store.get_votes_for_target(&target)?;
     let vote_count = votes.len() as u64;
     let threshold = solana_blacklist::meridian::VOTE_THRESHOLD;
@@ -375,6 +444,10 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(300);
 
+    // Open DB once at startup
+    let store = FirstSeenStore::open(&db_path).expect("Failed to open database");
+    let store = Arc::new(Mutex::new(store));
+
     // Run first fetch synchronously so data is available at startup
     let collector = build_collector(sources.clone());
     match collector.run().await {
@@ -397,7 +470,7 @@ async fn main() {
     let state = AppState {
         sources,
         cache,
-        db_path,
+        store,
     };
 
     let cors = CorsLayer::new()
@@ -409,6 +482,7 @@ async fn main() {
         .route("/sources", get(list_sources))
         .route("/blacklist", get(get_blacklist))
         .route("/blacklist/{pubkey}", get(get_pubkey))
+        .route("/validators", get(list_validators))
         .route("/validators/{pubkey}", get(get_validator_detail))
         .route("/epochs", get(list_epochs))
         .route("/epochs/{epoch}", get(get_epoch_detail))

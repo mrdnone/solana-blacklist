@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchEpochDetail } from '../api/endpoints'
-import type { EpochDetailResponse } from '../api/types'
+import { fetchValidators } from '../api/endpoints'
+import type { ValidatorsListResponse } from '../api/types'
 
-export function useEpochDetail(epoch: number | null, q: string = '', delinquent?: boolean, limit: number = 50, offset: number = 0) {
-  const [data, setData] = useState<EpochDetailResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+export function useValidators(q: string, delinquent: boolean | undefined, limit: number, offset: number) {
+  const [data, setData] = useState<ValidatorsListResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const isMounted = useRef(true)
 
@@ -14,17 +14,13 @@ export function useEpochDetail(epoch: number | null, q: string = '', delinquent?
   }, [])
 
   useEffect(() => {
-    if (epoch === null) {
-      setData(null)
-      return
-    }
     setIsLoading(true)
     setError(null)
-    fetchEpochDetail(epoch, q || undefined, delinquent, limit, offset)
+    fetchValidators(q || undefined, delinquent, limit, offset)
       .then((d) => { if (isMounted.current) setData(d) })
       .catch((e) => { if (isMounted.current) setError(e.message ?? String(e)) })
       .finally(() => { if (isMounted.current) setIsLoading(false) })
-  }, [epoch, q, delinquent, limit, offset])
+  }, [q, delinquent, limit, offset])
 
   return { data, isLoading, error }
 }

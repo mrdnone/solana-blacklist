@@ -1,17 +1,25 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import type { EpochDetailResponse, ValidatorEpochSnapshot } from '../api/types'
+import { useDeferredValue, useState } from 'react'
+import type { ValidatorEpochSnapshot } from '../api/types'
+import { useEpochDetail } from '../hooks/useEpochDetail'
 import { PubkeyCell } from './PubkeyCell'
 import { Spinner } from './Spinner'
-import { TableSearch } from './TableSearch'
+import { StatusFilter } from './StatusFilter'
+
+type StatusValue = 'active' | 'delinquent' | 'all'
+
+function statusToDelinquent(s: StatusValue): boolean | undefined {
+  if (s === 'active') return false
+  if (s === 'delinquent') return true
+  return undefined
+}
 
 interface Props {
   epoch: number
-  data: EpochDetailResponse | null
-  isLoading: boolean
-  error: string | null
   onBack: () => void
   onValidatorClick: (pubkey: string) => void
 }
+
+const PAGE_SIZE = 50
 
 function formatLamports(lamports?: number): string {
   if (lamports == null) return '—'
@@ -25,16 +33,14 @@ function formatNumber(n?: number): string {
 
 function ValidatorRow({ v, onValidatorClick }: { v: ValidatorEpochSnapshot; onValidatorClick: (pubkey: string) => void }) {
   return (
-    <tr className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300">
+    <tr
+      onClick={() => onValidatorClick(v.vote_identity)}
+      className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer"
+    >
       <td className="px-4 py-2.5 text-[0.82rem] text-text-primary truncate max-w-[160px]" title={v.name ?? undefined}>
-        <button
-          onClick={() => onValidatorClick(v.vote_identity)}
-          className="hover:text-accent-green transition-colors text-left truncate block w-full"
-        >
-          {v.name ?? <span className="text-text-muted">—</span>}
-        </button>
+        {v.name ?? <span className="text-text-muted">—</span>}
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => onValidatorClick(v.vote_identity)} className="hover:opacity-80 transition-opacity">
           <PubkeyCell pubkey={v.vote_identity} />
         </button>
@@ -54,29 +60,28 @@ function ValidatorRow({ v, onValidatorClick }: { v: ValidatorEpochSnapshot; onVa
   )
 }
 
-function filterValidators(validators: ValidatorEpochSnapshot[], query: string): ValidatorEpochSnapshot[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return validators
-  return validators.filter(
-    (v) =>
-      v.vote_identity.toLowerCase().includes(q) ||
-      v.name?.toLowerCase().includes(q) ||
-      v.node_pubkey?.toLowerCase().includes(q) ||
-      v.ip_country?.toLowerCase().includes(q) ||
-      v.version?.toLowerCase().includes(q),
-  )
-}
-
-export function EpochDetail({ epoch, data, isLoading, error, onBack, onValidatorClick }: Props) {
+export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearch = useDeferredValue(searchQuery)
+  const [offset, setOffset] = useState(0)
+  const [status, setStatus] = useState<StatusValue>('active')
 
-  const filtered = useMemo(
-    () => filterValidators(data?.validators ?? [], deferredSearch),
-    [data?.validators, deferredSearch],
-  )
+  // Reset offset when search or filter changes
+  const [prevSearch, setPrevSearch] = useState(deferredSearch)
+  const [prevStatus, setPrevStatus] = useState(status)
+  if (deferredSearch !== prevSearch || status !== prevStatus) {
+    setPrevSearch(deferredSearch)
+    setPrevStatus(status)
+    setOffset(0)
+  }
 
-  if (isLoading) return <Spinner message={`Loading epoch ${epoch}...`} />
+  const { data, isLoading, error } = useEpochDetail(epoch, deferredSearch, statusToDelinquent(status), PAGE_SIZE, offset)
+
+  const total = data?.total ?? 0
+  const start = offset + 1
+  const end = Math.min(offset + PAGE_SIZE, total)
+
+  if (isLoading && !data) return <Spinner message={`Loading epoch ${epoch}...`} />
 
   if (error) {
     return (
@@ -113,15 +118,20 @@ export function EpochDetail({ epoch, data, isLoading, error, onBack, onValidator
         </p>
       </div>
 
-      {/* Search */}
-      <TableSearch value={searchQuery} onChange={setSearchQuery} />
+      {/* Search + Filter */}
+      <div className="flex flex-wrap items-center gap-4">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by name, vote pubkey, or node pubkey…"
+          className="flex-1 min-w-[200px] max-w-md bg-card-bg border border-white/[0.06] rounded-lg px-4 py-2.5 text-[0.82rem] text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent-green/30 transition-colors"
+        />
+        <StatusFilter value={status} onChange={setStatus} />
+      </div>
 
       {/* Validator table */}
       <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
-        <div className="px-5 py-2.5 border-b border-white/[0.04] text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
-          Showing <span className="text-text-primary">{filtered.length.toLocaleString()}</span>
-          {filtered.length !== data.validator_count && ` of ${data.validator_count.toLocaleString()}`} validators
-        </div>
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10 bg-[#0d0d18]">
@@ -134,14 +144,14 @@ export function EpochDetail({ epoch, data, isLoading, error, onBack, onValidator
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {data.validators.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-16 text-center text-text-muted text-[0.85rem]">
                     No validators match your search
                   </td>
                 </tr>
               ) : (
-                filtered.map((v) => (
+                data.validators.map((v) => (
                   <ValidatorRow key={v.vote_identity} v={v} onValidatorClick={onValidatorClick} />
                 ))
               )}
@@ -149,6 +159,31 @@ export function EpochDetail({ epoch, data, isLoading, error, onBack, onValidator
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-[0.78rem] text-text-muted font-mono">
+            Showing {start}–{end} of {total.toLocaleString()}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              disabled={offset === 0}
+              className="text-[0.72rem] tracking-[2px] uppercase font-mono border border-white/[0.08] rounded-lg px-4 py-2 text-text-secondary hover:text-text-primary hover:border-white/[0.15] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setOffset(offset + PAGE_SIZE)}
+              disabled={offset + PAGE_SIZE >= total}
+              className="text-[0.72rem] tracking-[2px] uppercase font-mono border border-white/[0.08] rounded-lg px-4 py-2 text-text-secondary hover:text-text-primary hover:border-white/[0.15] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

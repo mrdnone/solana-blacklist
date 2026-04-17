@@ -320,9 +320,15 @@ impl BlacklistCollector {
             }
         }
 
+        let source_count = entries
+            .iter()
+            .flat_map(|e| e.sources.iter().map(|s| s.name.as_str()))
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+
         Ok(BlacklistResult {
             unique_pubkeys: entries.len(),
-            sources: self.sources.len(),
+            sources: source_count,
             fetched_at: Some(chrono::Utc::now().to_rfc3339()),
             entries,
         })

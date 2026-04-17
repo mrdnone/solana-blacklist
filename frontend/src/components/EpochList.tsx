@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import type { EpochSummary } from '../api/types'
 import { Spinner } from './Spinner'
 
@@ -15,6 +16,15 @@ function formatLamports(lamports?: number): string {
 }
 
 export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Props) {
+  const [epochSearch, setEpochSearch] = useState('')
+
+  const filteredData = useMemo(() => {
+    if (!data) return null
+    const q = epochSearch.trim()
+    if (!q) return data
+    return data.filter((e) => String(e.epoch).includes(q))
+  }, [data, epochSearch])
+
   if (isLoading) return <Spinner message="Loading epochs..." />
 
   if (error) {
@@ -27,6 +37,12 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
       </div>
     )
   }
+
+  const totalCount = data?.length ?? 0
+  const shownCount = filteredData?.length ?? 0
+  const countLabel = epochSearch.trim()
+    ? `${shownCount} of ${totalCount} epochs`
+    : `${totalCount} epochs`
 
   return (
     <div className="space-y-6">
@@ -41,15 +57,24 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
       </button>
 
       <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
-        <div className="px-5 py-3 border-b border-white/[0.04]">
+        <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-4">
           <h3 className="text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
-            Stored Epochs <span className="text-text-primary">({data?.length ?? 0})</span>
+            Stored Epochs <span className="text-text-primary">({countLabel})</span>
           </h3>
+          <input
+            type="text"
+            value={epochSearch}
+            onChange={(e) => setEpochSearch(e.target.value)}
+            placeholder="Search epoch number..."
+            className="ml-auto max-w-[200px] rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-[0.75rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300"
+          />
         </div>
 
-        {!data || data.length === 0 ? (
+        {!filteredData || filteredData.length === 0 ? (
           <div className="px-5 py-12 text-center text-text-muted text-[0.85rem]">
-            No epoch snapshots available yet. Snapshots are taken once per epoch boundary.
+            {epochSearch.trim()
+              ? 'No epochs match your search.'
+              : 'No epoch snapshots available yet. Snapshots are taken once per epoch boundary.'}
           </div>
         ) : (
           <div className="overflow-auto max-h-[70vh]">
@@ -64,7 +89,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
                 </tr>
               </thead>
               <tbody>
-                {data.map((e) => (
+                {filteredData.map((e) => (
                   <tr
                     key={e.epoch}
                     onClick={() => onEpochClick(e.epoch)}

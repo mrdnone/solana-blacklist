@@ -8,7 +8,8 @@ interface Props {
 export function PubkeyCell({ pubkey }: Props) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     await navigator.clipboard.writeText(pubkey)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)

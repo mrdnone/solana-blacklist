@@ -13,8 +13,8 @@ import { MeridianVoting } from './components/MeridianVoting'
 import { SuggestSource } from './components/SuggestSource'
 import { TableSearch } from './components/TableSearch'
 import { ValidatorDetail } from './components/ValidatorDetail'
+import { ValidatorsList } from './components/ValidatorsList'
 import { useBlacklist } from './hooks/useBlacklist'
-import { useEpochDetail } from './hooks/useEpochDetail'
 import { useEpochs } from './hooks/useEpochs'
 import { usePubkeyLookup } from './hooks/usePubkeyLookup'
 import { useSources } from './hooks/useSources'
@@ -51,13 +51,35 @@ type Page =
   | { kind: 'suggest-source' }
   | { kind: 'meridian' }
   | { kind: 'validator'; pubkey: string }
+  | { kind: 'validators' }
   | { kind: 'epochs' }
   | { kind: 'epoch-detail'; epoch: number }
 
 export default function App() {
-  const { sourceNames } = useSources()
+  const { sourceNames: configSourceNames } = useSources()
   const { data, isLoading, error, fetchedAt, refetch } = useBlacklist()
   const pubkeyLookup = usePubkeyLookup()
+
+  // Build a map of source name → entry count, merging config + data-derived sources
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    // Seed with config sources (all start at 0)
+    for (const name of configSourceNames) counts.set(name, 0)
+    // Count from actual data
+    if (data?.entries) {
+      for (const e of data.entries) {
+        for (const s of e.sources) {
+          counts.set(s.name, (counts.get(s.name) ?? 0) + 1)
+        }
+      }
+    }
+    return counts
+  }, [configSourceNames, data?.entries])
+
+  const sourceNames = useMemo(
+    () => Array.from(sourceCounts.keys()).sort(),
+    [sourceCounts],
+  )
 
   const [page, setPage] = useState<Page>({ kind: 'home' })
   const [activeSource, setActiveSource] = useState<string | null>(null)
@@ -78,11 +100,8 @@ export default function App() {
   // Epochs hook
   const epochs = useEpochs()
 
-  // Epoch detail hook
-  const epochNumber = page.kind === 'epoch-detail' ? page.epoch : null
-  const epochDetail = useEpochDetail(epochNumber)
-
   const navigateToValidator = (pubkey: string) => setPage({ kind: 'validator', pubkey })
+  const navigateToValidators = () => setPage({ kind: 'validators' })
   const navigateToMeridian = () => setPage({ kind: 'meridian' })
   const navigateToEpochs = () => setPage({ kind: 'epochs' })
   const navigateToEpochDetail = (epoch: number) => setPage({ kind: 'epoch-detail', epoch })
@@ -109,6 +128,14 @@ export default function App() {
           </main>
         )
 
+      case 'validators':
+        return (
+          <ValidatorsList
+            onBack={navigateHome}
+            onValidatorClick={navigateToValidator}
+          />
+        )
+
       case 'epochs':
         return (
           <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
@@ -127,9 +154,6 @@ export default function App() {
           <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
             <EpochDetail
               epoch={page.epoch}
-              data={epochDetail.data}
-              isLoading={epochDetail.isLoading}
-              error={epochDetail.error}
               onBack={navigateToEpochs}
               onValidatorClick={navigateToValidator}
             />
@@ -143,7 +167,7 @@ export default function App() {
             {/* Stats */}
             <StatsBar
               uniquePubkeys={data?.unique_pubkeys ?? null}
-              sourceCount={data?.sources ?? null}
+              sourceCount={sourceNames.length > 0 ? sourceNames.length : (data?.sources ?? null)}
               fetchedAt={fetchedAt}
               isLoading={isLoading}
             />
@@ -155,7 +179,7 @@ export default function App() {
 
             {/* Source filter */}
             {sourceNames.length > 0 && (
-              <SourceFilter sources={sourceNames} active={activeSource} onChange={setActiveSource} />
+              <SourceFilter sources={sourceNames} counts={sourceCounts} active={activeSource} onChange={setActiveSource} />
             )}
 
             {/* Pubkey lookup */}
@@ -165,6 +189,7 @@ export default function App() {
               isLoading={pubkeyLookup.isLoading}
               result={pubkeyLookup.result}
               error={pubkeyLookup.error}
+              onViewValidator={navigateToValidator}
             />
 
             {/* Search + Table */}
@@ -202,6 +227,7 @@ export default function App() {
         <Header
           onSuggestSource={() => setPage({ kind: 'suggest-source' })}
           onEpochs={navigateToEpochs}
+          onValidators={navigateToValidators}
           onMeridian={navigateToMeridian}
         />
 

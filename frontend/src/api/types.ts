@@ -24,6 +24,7 @@ export interface PubkeyLookupResult {
   name?: string
   first_seen?: string
   sources: SourceRef[]
+  in_validators_db?: boolean
 }
 
 export interface SourceConfig {
@@ -104,6 +105,9 @@ export interface EpochDetailResponse {
   epoch: number
   validator_count: number
   validators: ValidatorEpochSnapshot[]
+  total: number
+  limit: number
+  offset: number
 }
 
 // ── Meridian voting ─────────────────────────────────────────────────────────
@@ -142,4 +146,13 @@ export interface VoteSubmitRequest {
 export interface VoteSubmitResponse {
   status: string
   inserted: boolean
+}
+
+// ── Validators list ─────────────────────────────────────────────────────────
+
+export interface ValidatorsListResponse {
+  validators: ValidatorMeta[]
+  total: number
+  limit: number
+  offset: number
 }
