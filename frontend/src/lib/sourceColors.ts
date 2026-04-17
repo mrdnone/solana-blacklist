@@ -20,6 +20,11 @@ export const SOURCE_COLORS: Record<string, { bg: string; text: string; border: s
     text: 'text-rose-300',
     border: 'border-rose-400/20',
   },
+  meridian: {
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-300',
+    border: 'border-amber-400/20',
+  },
 }
 
 export const FALLBACK_COLORS = {

@@ -7,8 +7,8 @@ use axum::{
     Router,
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{IntoResponse, Json, Response},
-    routing::get,
+    response::{Html, IntoResponse, Json, Response},
+    routing::{get, post},
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -195,6 +195,122 @@ async fn get_epoch_detail(
     Ok(Json(body).into_response())
 }
 
+// ── Meridian voting endpoints ────────────────────────────────────────────────
+
+async fn vote_submit(
+    State(state): State<AppState>,
+    Json(req): Json<solana_blacklist::meridian::VoteRequest>,
+) -> ApiResult<Response> {
+    // Validate pubkey formats
+    if let Err(reason) = solana_blacklist::utils::validate_solana_pubkey(&req.voter_identity) {
+        let body = json!({ "error": format!("invalid voter_identity: {}", reason) });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+    if let Err(reason) = solana_blacklist::utils::validate_solana_pubkey(&req.target_vote_pubkey) {
+        let body = json!({ "error": format!("invalid target_vote_pubkey: {}", reason) });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+
+    // Voter must be a known validator
+    let resolved = store.find_vote_identity_for(&req.voter_identity)?;
+    let Some(voter_vote_account) = resolved else {
+        let body = json!({ "error": "voter_identity is not a known validator" });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    };
+
+    // Cannot self-vote
+    if voter_vote_account == req.target_vote_pubkey {
+        let body = json!({ "error": "cannot vote to blacklist your own vote account" });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    // Target must exist
+    if !store.validator_exists(&req.target_vote_pubkey)? {
+        let body = json!({ "error": "target_vote_pubkey is not a known active validator" });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    // Verify ed25519 signature
+    if let Err(e) = solana_blacklist::meridian::verify_vote(
+        &req.voter_identity,
+        &req.target_vote_pubkey,
+        &req.signature,
+    ) {
+        let body = json!({ "error": format!("signature verification failed: {e}") });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    let vote = solana_blacklist::persistence::Vote {
+        voter_identity: req.voter_identity,
+        target_vote_pubkey: req.target_vote_pubkey,
+        signature: req.signature,
+        voted_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let inserted = store.insert_vote(&vote)?;
+
+    Ok(Json(json!({ "status": "ok", "inserted": inserted })).into_response())
+}
+
+async fn votes_list(State(state): State<AppState>) -> ApiResult<Response> {
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let targets = store.list_vote_targets()?;
+    Ok(Json(json!({
+        "threshold": solana_blacklist::meridian::VOTE_THRESHOLD,
+        "targets": targets,
+    }))
+    .into_response())
+}
+
+async fn vote_detail(
+    State(state): State<AppState>,
+    Path(target): Path<String>,
+) -> ApiResult<Response> {
+    if let Err(reason) = solana_blacklist::utils::validate_solana_pubkey(&target) {
+        let body = json!({ "error": format!("invalid pubkey: {}", reason) });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    let store = solana_blacklist::persistence::FirstSeenStore::open(&state.db_path)?;
+    let votes = store.get_votes_for_target(&target)?;
+    let vote_count = votes.len() as u64;
+    let threshold = solana_blacklist::meridian::VOTE_THRESHOLD;
+
+    Ok(Json(json!({
+        "target": target,
+        "vote_count": vote_count,
+        "threshold": threshold,
+        "blacklisted": vote_count >= threshold,
+        "votes": votes,
+    }))
+    .into_response())
+}
+
+async fn meridian_ui() -> Html<&'static str> {
+    Html(include_str!("../static/meridian.html"))
+}
+
+async fn meridian_info() -> impl IntoResponse {
+    Json(json!({
+        "name": "Meridian — Validator Community Voting Blacklist",
+        "description": "Active validators sign a canonical message to vote for blacklisting a target. Threshold: 10 votes.",
+        "how_to_vote": [
+            "1. Choose the target vote account pubkey to blacklist.",
+            "2. Build the canonical message: meridian:blacklist:<target_vote_pubkey>",
+            "3. Sign with your validator identity keypair: solana sign-offchain-message -k <identity-keypair> <message>",
+            "4. POST /votes with { voter_identity, target_vote_pubkey, signature }"
+        ],
+        "endpoints": {
+            "POST /votes": "Submit a vote",
+            "GET /votes": "List all targets with vote counts",
+            "GET /votes/{target}": "Get votes for a specific target",
+            "GET /meridian": "Voting UI (HTML)",
+            "GET /meridian/info": "This endpoint"
+        }
+    }))
+}
+
 // ── Background collector ─────────────────────────────────────────────────────
 
 fn build_collector(sources: HashMap<String, BlacklistSource>) -> BlacklistCollector {
@@ -296,6 +412,10 @@ async fn main() {
         .route("/validators/{pubkey}", get(get_validator_detail))
         .route("/epochs", get(list_epochs))
         .route("/epochs/{epoch}", get(get_epoch_detail))
+        .route("/votes", post(vote_submit).get(votes_list))
+        .route("/votes/{target}", get(vote_detail))
+        .route("/meridian", get(meridian_ui))
+        .route("/meridian/info", get(meridian_info))
         .layer(cors)
         .with_state(state);
 

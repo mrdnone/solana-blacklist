@@ -105,3 +105,41 @@ export interface EpochDetailResponse {
   validator_count: number
   validators: ValidatorEpochSnapshot[]
 }
+
+// ── Meridian voting ─────────────────────────────────────────────────────────
+
+export interface Vote {
+  voter_identity: string
+  target_vote_pubkey: string
+  signature: string
+  voted_at: string
+}
+
+export interface VoteTarget {
+  target_vote_pubkey: string
+  vote_count: number
+}
+
+export interface VotesListResponse {
+  threshold: number
+  targets: VoteTarget[]
+}
+
+export interface VoteDetailResponse {
+  target: string
+  vote_count: number
+  threshold: number
+  blacklisted: boolean
+  votes: Vote[]
+}
+
+export interface VoteSubmitRequest {
+  voter_identity: string
+  target_vote_pubkey: string
+  signature: string
+}
+
+export interface VoteSubmitResponse {
+  status: string
+  inserted: boolean
+}

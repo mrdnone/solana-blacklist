@@ -9,6 +9,7 @@ import { PubkeyLookup } from './components/PubkeyLookup'
 import { SourceFilter } from './components/SourceFilter'
 import { Stars } from './components/Stars'
 import { StatsBar } from './components/StatsBar'
+import { MeridianVoting } from './components/MeridianVoting'
 import { SuggestSource } from './components/SuggestSource'
 import { TableSearch } from './components/TableSearch'
 import { ValidatorDetail } from './components/ValidatorDetail'
@@ -48,6 +49,7 @@ function filterEntries(
 type Page =
   | { kind: 'home' }
   | { kind: 'suggest-source' }
+  | { kind: 'meridian' }
   | { kind: 'validator'; pubkey: string }
   | { kind: 'epochs' }
   | { kind: 'epoch-detail'; epoch: number }
@@ -81,6 +83,7 @@ export default function App() {
   const epochDetail = useEpochDetail(epochNumber)
 
   const navigateToValidator = (pubkey: string) => setPage({ kind: 'validator', pubkey })
+  const navigateToMeridian = () => setPage({ kind: 'meridian' })
   const navigateToEpochs = () => setPage({ kind: 'epochs' })
   const navigateToEpochDetail = (epoch: number) => setPage({ kind: 'epoch-detail', epoch })
   const navigateHome = () => setPage({ kind: 'home' })
@@ -89,6 +92,9 @@ export default function App() {
     switch (page.kind) {
       case 'suggest-source':
         return <SuggestSource onBack={navigateHome} />
+
+      case 'meridian':
+        return <MeridianVoting onBack={navigateHome} />
 
       case 'validator':
         return (
@@ -196,6 +202,7 @@ export default function App() {
         <Header
           onSuggestSource={() => setPage({ kind: 'suggest-source' })}
           onEpochs={navigateToEpochs}
+          onMeridian={navigateToMeridian}
         />
 
         {renderPage()}

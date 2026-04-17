@@ -73,6 +73,20 @@ pub struct EpochSummary {
     pub snapshotted_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vote {
+    pub voter_identity: String,
+    pub target_vote_pubkey: String,
+    pub signature: String,
+    pub voted_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VoteTarget {
+    pub target_vote_pubkey: String,
+    pub vote_count: u64,
+}
+
 pub struct FirstSeenStore {
     conn: Connection,
 }
@@ -168,6 +182,19 @@ impl FirstSeenStore {
                 ON validator_epochs (epoch);",
         )
         .context("failed to create validator_epochs table")?;
+
+        // Votes table for Meridian community voting
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS votes (
+                voter_identity      TEXT NOT NULL,
+                target_vote_pubkey  TEXT NOT NULL,
+                signature           TEXT NOT NULL,
+                voted_at            TEXT NOT NULL,
+                PRIMARY KEY (voter_identity, target_vote_pubkey)
+            );
+            CREATE INDEX IF NOT EXISTS idx_votes_target ON votes (target_vote_pubkey);",
+        )
+        .context("failed to create votes table")?;
 
         Ok(Self { conn })
     }
@@ -383,6 +410,101 @@ impl FirstSeenStore {
             })),
             None => Ok(None),
         }
+    }
+
+    // ── Meridian voting methods ────────────────────────────────────────────
+
+    /// Insert a vote. Returns true if the row was actually inserted (false if duplicate).
+    pub fn insert_vote(&self, vote: &Vote) -> Result<bool> {
+        let changed = self.conn.execute(
+            "INSERT OR IGNORE INTO votes (voter_identity, target_vote_pubkey, signature, voted_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                vote.voter_identity,
+                vote.target_vote_pubkey,
+                vote.signature,
+                vote.voted_at,
+            ],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Get all votes for a specific target.
+    pub fn get_votes_for_target(&self, target: &str) -> Result<Vec<Vote>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT voter_identity, target_vote_pubkey, signature, voted_at
+             FROM votes WHERE target_vote_pubkey = ?1 ORDER BY voted_at",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![target], |row| {
+            Ok(Vote {
+                voter_identity: row.get(0)?,
+                target_vote_pubkey: row.get(1)?,
+                signature: row.get(2)?,
+                voted_at: row.get(3)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// List all vote targets with their vote counts, ordered descending.
+    pub fn list_vote_targets(&self) -> Result<Vec<VoteTarget>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT target_vote_pubkey, COUNT(*) as vote_count
+             FROM votes GROUP BY target_vote_pubkey ORDER BY vote_count DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(VoteTarget {
+                target_vote_pubkey: row.get(0)?,
+                vote_count: row.get(1)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Get target pubkeys that have ≥ threshold votes.
+    pub fn get_blacklisted_by_votes(&self, threshold: u64) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT target_vote_pubkey FROM votes
+             GROUP BY target_vote_pubkey HAVING COUNT(*) >= ?1",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![threshold], |row| row.get(0))?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Look up the vote_identity for a given identity/node_pubkey in the validators table.
+    pub fn find_vote_identity_for(&self, identity_pubkey: &str) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT vote_identity FROM validators
+             WHERE identity = ?1 OR node_pubkey = ?1 OR vote_identity = ?1
+             LIMIT 1",
+        )?;
+        let mut rows = stmt.query(rusqlite::params![identity_pubkey])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Check whether a validator exists by vote_identity.
+    pub fn validator_exists(&self, vote_pubkey: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM validators WHERE vote_identity = ?1",
+            rusqlite::params![vote_pubkey],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
     }
 
     // ── Existing methods ─────────────────────────────────────────────────────
@@ -878,6 +1000,153 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // ── Meridian voting tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_votes_table_created() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let _store = FirstSeenStore::open(&path).expect("should open");
+        let conn = Connection::open(&path).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM votes", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn make_vote(voter: &str, target: &str) -> Vote {
+        Vote {
+            voter_identity: voter.to_string(),
+            target_vote_pubkey: target.to_string(),
+            signature: format!("sig_{voter}_{target}"),
+            voted_at: "2026-04-17T12:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_insert_vote_and_retrieve() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        let vote = make_vote("VoterA", "TargetX");
+        assert!(store.insert_vote(&vote).unwrap());
+
+        let votes = store.get_votes_for_target("TargetX").unwrap();
+        assert_eq!(votes.len(), 1);
+        assert_eq!(votes[0].voter_identity, "VoterA");
+        assert_eq!(votes[0].signature, "sig_VoterA_TargetX");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_insert_vote_idempotent() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        let vote = make_vote("VoterA", "TargetX");
+        assert!(store.insert_vote(&vote).unwrap());
+        assert!(!store.insert_vote(&vote).unwrap());
+
+        let votes = store.get_votes_for_target("TargetX").unwrap();
+        assert_eq!(votes.len(), 1);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_list_vote_targets() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        store.insert_vote(&make_vote("V1", "TargetA")).unwrap();
+        store.insert_vote(&make_vote("V2", "TargetA")).unwrap();
+        store.insert_vote(&make_vote("V1", "TargetB")).unwrap();
+
+        let targets = store.list_vote_targets().unwrap();
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].target_vote_pubkey, "TargetA");
+        assert_eq!(targets[0].vote_count, 2);
+        assert_eq!(targets[1].target_vote_pubkey, "TargetB");
+        assert_eq!(targets[1].vote_count, 1);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_get_blacklisted_by_votes_threshold() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        // Insert 9 votes for TargetA → should NOT be blacklisted
+        for i in 0..9 {
+            store
+                .insert_vote(&make_vote(&format!("V{i}"), "TargetA"))
+                .unwrap();
+        }
+        assert!(store.get_blacklisted_by_votes(10).unwrap().is_empty());
+
+        // 10th vote → should now be blacklisted
+        store.insert_vote(&make_vote("V9", "TargetA")).unwrap();
+        let bl = store.get_blacklisted_by_votes(10).unwrap();
+        assert_eq!(bl, vec!["TargetA"]);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_find_vote_identity_for() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        let mut meta = make_validator_meta("VoteAcc", Some("Test"));
+        meta.identity = Some("IdentityPK".to_string());
+        meta.node_pubkey = Some("NodePK".to_string());
+        store.upsert_validators(&[meta]).unwrap();
+
+        // Find by identity
+        assert_eq!(
+            store.find_vote_identity_for("IdentityPK").unwrap(),
+            Some("VoteAcc".to_string())
+        );
+        // Find by node_pubkey
+        assert_eq!(
+            store.find_vote_identity_for("NodePK").unwrap(),
+            Some("VoteAcc".to_string())
+        );
+        // Find by vote_identity directly
+        assert_eq!(
+            store.find_vote_identity_for("VoteAcc").unwrap(),
+            Some("VoteAcc".to_string())
+        );
+        // Not found
+        assert_eq!(store.find_vote_identity_for("Unknown").unwrap(), None);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_validator_exists() {
+        let path = temp_db_path();
+        let _ = std::fs::remove_file(&path);
+        let store = FirstSeenStore::open(&path).expect("should open");
+
+        store
+            .upsert_validators(&[make_validator_meta("VoteAcc", Some("Test"))])
+            .unwrap();
+
+        assert!(store.validator_exists("VoteAcc").unwrap());
+        assert!(!store.validator_exists("Unknown").unwrap());
+
         let _ = std::fs::remove_file(&path);
     }
 }

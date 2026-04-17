@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiPost } from './client'
 import type {
   BlacklistResponse,
   EpochDetailResponse,
@@ -6,6 +6,10 @@ import type {
   PubkeyLookupResult,
   SourcesResponse,
   ValidatorDetailResponse,
+  VoteDetailResponse,
+  VotesListResponse,
+  VoteSubmitRequest,
+  VoteSubmitResponse,
 } from './types'
 
 export const fetchSources = () => apiFetch<SourcesResponse>('/sources')
@@ -22,3 +26,11 @@ export const fetchEpochs = () => apiFetch<EpochSummary[]>('/epochs')
 
 export const fetchEpochDetail = (epoch: number) =>
   apiFetch<EpochDetailResponse>(`/epochs/${epoch}`)
+
+export const fetchVotes = () => apiFetch<VotesListResponse>('/votes')
+
+export const fetchVoteDetail = (target: string) =>
+  apiFetch<VoteDetailResponse>(`/votes/${encodeURIComponent(target)}`)
+
+export const submitVote = (req: VoteSubmitRequest) =>
+  apiPost<VoteSubmitResponse>('/votes', req)

@@ -185,6 +185,51 @@ impl BlacklistCollector {
                     eprintln!("[persistence] Failed to upsert validators: {err:#}");
                 }
             }
+
+            // Also upsert RPC-only validators not covered by Stakewiz, so that
+            // all on-chain validators are known (needed for Meridian voting).
+            let rpc_only: Vec<ValidatorMeta> = current_accounts
+                .iter()
+                .chain(delinquent_accounts.iter())
+                .filter(|a| !stakewiz_map.contains_key(&a.vote_pubkey))
+                .map(|a| {
+                    let is_delinquent = delinquent_accounts
+                        .iter()
+                        .any(|d| d.vote_pubkey == a.vote_pubkey);
+                    ValidatorMeta {
+                        vote_identity: a.vote_pubkey.clone(),
+                        identity: None,
+                        name: None,
+                        delinquent: Some(is_delinquent),
+                        activated_stake: None,
+                        commission: Some(a.commission as f64),
+                        skip_rate: None,
+                        uptime: None,
+                        version: None,
+                        wiz_score: None,
+                        apy_estimate: None,
+                        ip_country: None,
+                        image: None,
+                        website: None,
+                        updated_at: chrono::Utc::now().to_rfc3339(),
+                        node_pubkey: Some(a.node_pubkey.clone()),
+                        activated_stake_lamports: Some(a.activated_stake),
+                        last_vote: Some(a.last_vote),
+                        root_slot: Some(a.root_slot),
+                        epoch_credits: a.epoch_credits.last().map(|c| c[1]),
+                        prev_epoch_credits: a.epoch_credits.last().map(|c| c[2]),
+                    }
+                })
+                .collect();
+            if !rpc_only.is_empty() {
+                println!(
+                    "[persistence] Upserting {} RPC-only validators (not in Stakewiz)",
+                    rpc_only.len()
+                );
+                if let Err(err) = store.upsert_validators(&rpc_only) {
+                    eprintln!("[persistence] Failed to upsert RPC-only validators: {err:#}");
+                }
+            }
         }
 
         // Epoch snapshot: store once per epoch boundary
@@ -238,6 +283,40 @@ impl BlacklistCollector {
                 for entry in &mut entries {
                     entry.first_seen = dates.get(&entry.pubkey).cloned();
                 }
+            }
+        }
+
+        // Meridian: inject community-voted blacklist entries
+        if let Some(ref store) = store {
+            match store.get_blacklisted_by_votes(crate::meridian::VOTE_THRESHOLD) {
+                Ok(pubkeys) => {
+                    for pubkey in pubkeys {
+                        let src = BlacklistResultEntrySource {
+                            name: crate::meridian::MERIDIAN_SOURCE_NAME.to_string(),
+                            reason: Some(
+                                "Community-voted by ≥10 active validators".to_string(),
+                            ),
+                            validator_name: None,
+                        };
+                        if let Some(entry) = entries.iter_mut().find(|e| e.pubkey == pubkey) {
+                            if !entry
+                                .sources
+                                .iter()
+                                .any(|s| s.name == crate::meridian::MERIDIAN_SOURCE_NAME)
+                            {
+                                entry.sources.push(src);
+                            }
+                        } else {
+                            entries.push(BlacklistResultEntry {
+                                pubkey,
+                                name: None,
+                                first_seen: None,
+                                sources: vec![src],
+                            });
+                        }
+                    }
+                }
+                Err(e) => eprintln!("[meridian] Failed to query votes: {e:#}"),
             }
         }
 
