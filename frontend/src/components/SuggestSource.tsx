@@ -22,65 +22,44 @@ export function SuggestSource({ onBack }: Props) {
           Suggest a Source
         </h2>
         <p className="mt-3 text-[0.88rem] text-text-secondary leading-relaxed">
-          The Solana Blacklist aggregates data from multiple community sources. You can add your own by submitting a pull request to the repository.
+          The Solana Blacklist aggregates data from multiple community sources. You can add your own by submitting a single-file pull request to the repository — no Rust code changes required.
         </p>
       </div>
 
-      {/* Overview */}
+      {/* How it works */}
       <Section title="How It Works">
         <p>
           Each blacklist source is a single <Code>.json</Code> file in the{' '}
-          <Code>src/sources/</Code> directory. The file describes where to fetch data from
-          (a JSON API or CSV), how to extract validator pubkeys, and optional filters and reason templates.
-          Sources are compiled into the binary at build time.
+          <Code>src/sources/</Code> directory. At build time, all <Code>.json</Code> files
+          in that folder are automatically discovered and compiled in — so adding a new
+          source is as simple as adding one file.
         </p>
       </Section>
 
       {/* Step by step */}
-      <Section title="Step-by-Step Guide">
+      <Section title="Step-by-Step">
         <ol className="list-decimal list-inside space-y-4 text-text-secondary">
           <li>
             <strong className="text-text-primary">Fork the repository</strong>
             <p className="mt-1 ml-5">
               Fork{' '}
               <A href="https://github.com/mrdnone/solana-blacklist">mrdnone/solana-blacklist</A>{' '}
-              on GitHub and clone your fork locally.
+              on GitHub.
             </p>
           </li>
           <li>
-            <strong className="text-text-primary">Create the source JSON file</strong>
+            <strong className="text-text-primary">Add your source JSON file</strong>
             <p className="mt-1 ml-5">
-              Add a new file in <Code>src/sources/</Code> — for example{' '}
-              <Code>src/sources/my_source.json</Code>. See the schema below for all available fields.
+              Create <Code>src/sources/your_source_name.json</Code> following the schema below.
+              That's the only file you need to touch.
             </p>
-          </li>
-          <li>
-            <strong className="text-text-primary">Register it in the code</strong>
-            <p className="mt-1 ml-5">
-              Open <Code>src/blacklist.rs</Code> and add one line to the{' '}
-              <Code>SOURCE_FILES</Code> array:
-            </p>
-            <CodeBlock>{`const SOURCE_FILES: &[(&str, &str)] = &[
-    // ... existing sources ...
-    ("my_source", include_str!("sources/my_source.json")),
-];`}</CodeBlock>
-          </li>
-          <li>
-            <strong className="text-text-primary">Test it</strong>
-            <CodeBlock>{`# Build
-cargo build
-
-# Run integration test for your source
-TEST_BLACKLIST_SOURCE="my_source" \\
-TEST_BLACKLIST_PUBKEY="<known_pubkey_in_your_source>" \\
-cargo test test_blacklist_source_contains_pubkey -- --ignored --nocapture`}</CodeBlock>
           </li>
           <li>
             <strong className="text-text-primary">Submit a Pull Request</strong>
             <p className="mt-1 ml-5">
-              Push your branch and open a PR to{' '}
-              <A href="https://github.com/mrdnone/solana-blacklist/pulls">mrdnone/solana-blacklist</A>.
-              Include a brief description of the source and why it should be included.
+              Open a PR to{' '}
+              <A href="https://github.com/mrdnone/solana-blacklist/pulls">mrdnone/solana-blacklist</A>{' '}
+              with a brief description of the source and why it should be included.
             </p>
           </li>
         </ol>
@@ -89,7 +68,8 @@ cargo test test_blacklist_source_contains_pubkey -- --ignored --nocapture`}</Cod
       {/* JSON Schema */}
       <Section title="Source JSON Schema">
         <p className="mb-4">
-          Every source file must have these fields. Optional fields can be omitted or set to <Code>null</Code>.
+          All fields below are supported. Required fields are marked <span className="text-rose-400">*</span>.
+          Optional fields can be omitted entirely or set to <Code>null</Code>.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[0.82rem]">
@@ -101,36 +81,32 @@ cargo test test_blacklist_source_contains_pubkey -- --ignored --nocapture`}</Cod
               </tr>
             </thead>
             <tbody className="text-text-secondary">
-              <Field name="name" type="string" required desc={'Unique source identifier (e.g. "my_source")'} />
-              <Field name="url" type="string" required desc="HTTP(S) endpoint that returns the blacklist data" />
-              <Field name="handler" type={'"Json" | {Csv: {...}}'} required desc={'Parser type. Use "Json" for JSON APIs, or {"Csv": {"delimiter": 44, "headers": true}} for CSV'} />
-              <Field name="pubkey_path" type="string" required desc="JSONPath to extract the Solana vote-account pubkey from each record" />
-              <Field name="record_path" type="string?" desc="JSONPath to select records from the response. Defaults to root" />
-              <Field name="filters" type="string[]" desc="JSONPath predicates ANDed together. Records must match all to be included" />
-              <Field name="reason_path" type="string?" desc="JSONPath to extract the reason string from each record" />
-              <Field name="reason_template" type="string?" desc={'Template with {$.path} placeholders, e.g. "Rate: {$.rate:.2}%"'} />
+              <Field name="name" type="string" required desc='Unique source identifier, e.g. "my_source"' />
+              <Field name="url" type="string" required desc="HTTP(S) endpoint returning blacklist data" />
+              <Field name="handler" type='"Json" | {Csv:{…}}' required desc='Use "Json" for JSON APIs, or {"Csv": {"delimiter": 44, "headers": true}} for CSV' />
+              <Field name="pubkey_path" type="string" required desc="JSONPath to extract the vote-account pubkey from each record" />
+              <Field name="record_path" type="string?" desc="JSONPath to select the array of candidate records from the response root" />
+              <Field name="filters" type="string[]" desc="JSONPath predicates ANDed together — records must match all to be included" />
+              <Field name="reason_path" type="string?" desc="JSONPath to extract a reason string from each record" />
+              <Field name="reason_template" type="string?" desc='Template with {$.path} placeholders, e.g. "Rate: {$.sandwichRate:.2}%"' />
               <Field name="name_path" type="string?" desc="JSONPath to extract the validator name from each record" />
               <Field name="fetch_headers" type="object?" desc="Extra HTTP headers to send with the request" />
-              <Field name="contact_into" type="object?" desc="Contact info — website, discord, telegram, etc." />
+              <Field name="contact_into" type="object?" desc="Contact info for the source operator — website, discord, telegram, etc." />
             </tbody>
           </table>
         </div>
       </Section>
 
-      {/* Example */}
+      {/* Examples */}
       <Section title="Example: JSON API Source">
         <CodeBlock>{`{
   "name": "example_source",
   "url": "https://api.example.com/blacklist",
-  "contact_into": {
-    "website": "https://example.com"
-  },
+  "contact_into": { "website": "https://example.com" },
   "handler": "Json",
   "record_path": "$.data.validators[*]",
   "pubkey_path": "$.voteAccount",
-  "filters": [
-    "?(@.flagged == true)"
-  ],
+  "filters": ["?(@.flagged == true)"],
   "reason_path": "$.reason",
   "name_path": "$.validatorName"
 }`}</CodeBlock>
@@ -141,40 +117,34 @@ cargo test test_blacklist_source_contains_pubkey -- --ignored --nocapture`}</Cod
   "name": "example_csv",
   "url": "https://docs.google.com/spreadsheets/.../export?format=csv",
   "contact_into": null,
-  "handler": {
-    "Csv": {
-      "delimiter": 44,
-      "headers": true
-    }
-  },
+  "handler": { "Csv": { "delimiter": 44, "headers": true } },
   "filters": [],
   "record_path": null,
   "pubkey_path": "$.c1",
   "name_path": "$.c0"
 }`}</CodeBlock>
         <p className="mt-3 text-[0.82rem] text-text-muted">
-          CSV rows become JSON objects with column-index keys (<Code>c0</Code>, <Code>c1</Code>, ...).
-          If headers are enabled, the actual header names are also available as keys.
+          CSV rows are converted to JSON objects. Columns are accessible by header name (if enabled)
+          and always by index alias: <Code>c0</Code>, <Code>c1</Code>, …
         </p>
       </Section>
 
       {/* Requirements */}
       <Section title="Requirements for Acceptance">
         <ul className="list-disc list-inside space-y-2 text-text-secondary">
-          <li>The source must be publicly accessible (no auth required, or provide a public API key)</li>
+          <li>The source must be publicly accessible (no auth, or a public API key)</li>
           <li>It must return Solana validator vote-account pubkeys</li>
           <li>The data should be regularly updated by the source maintainer</li>
-          <li>Include contact info so we can reach the source operator if needed</li>
-          <li>Your PR must pass <Code>cargo build</Code>, <Code>cargo test</Code>, and <Code>cargo clippy</Code></li>
+          <li>Include contact info (<Code>contact_into</Code>) so we can reach the source operator</li>
         </ul>
       </Section>
 
       {/* CTA */}
       <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-8 text-center space-y-4">
         <p className="text-text-secondary text-[0.88rem]">
-          Questions? Open an issue or start a discussion on GitHub.
+          Ready to contribute? Create the file directly on GitHub or open an issue to discuss first.
         </p>
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-4 flex-wrap">
           <a
             href="https://github.com/mrdnone/solana-blacklist/issues/new"
             target="_blank"
@@ -185,12 +155,12 @@ cargo test test_blacklist_source_contains_pubkey -- --ignored --nocapture`}</Cod
             <ExternalIcon />
           </a>
           <a
-            href="https://github.com/mrdnone/solana-blacklist/pulls"
+            href="https://github.com/mrdnone/solana-blacklist/new/main/src/sources"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-[0.75rem] tracking-[2px] uppercase font-mono bg-accent-green/10 border border-accent-green/20 rounded-full px-5 py-2 text-accent-green hover:bg-accent-green/15 hover:border-accent-green/30 transition-all duration-300"
           >
-            Create PR
+            Add Source File on GitHub
             <ExternalIcon />
           </a>
         </div>
