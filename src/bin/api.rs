@@ -201,6 +201,7 @@ async fn get_pubkey(
 struct ValidatorsQuery {
     q: Option<String>,
     delinquent: Option<bool>,
+    exclude_zero_stake: Option<bool>,
     limit: Option<u32>,
     offset: Option<u32>,
 }
@@ -212,10 +213,11 @@ async fn list_validators(
     let limit = params.limit.unwrap_or(50).min(500);
     let offset = params.offset.unwrap_or(0);
     let q = params.q.as_deref();
+    let exclude_zero_stake = params.exclude_zero_stake.unwrap_or(false);
 
     let store = state.store.lock().unwrap();
-    let validators = store.list_validators(q, params.delinquent, limit, offset)?;
-    let total = store.count_validators(q, params.delinquent)?;
+    let validators = store.list_validators(q, params.delinquent, exclude_zero_stake, limit, offset)?;
+    let total = store.count_validators(q, params.delinquent, exclude_zero_stake)?;
 
     Ok(Json(json!({
         "validators": validators,

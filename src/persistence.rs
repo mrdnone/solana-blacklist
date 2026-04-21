@@ -474,6 +474,7 @@ impl FirstSeenStore {
         &self,
         query: Option<&str>,
         delinquent: Option<bool>,
+        exclude_zero_stake: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<ValidatorMeta>> {
@@ -490,8 +491,11 @@ impl FirstSeenStore {
         if let Some(d) = delinquent {
             conditions.push(format!("delinquent = ?{idx}"));
             params.push(Box::new(d));
-            #[allow(unused_assignments)]
-            { idx += 1; }
+            idx += 1;
+        }
+        if exclude_zero_stake {
+            conditions.push(format!("(activated_stake_lamports IS NOT NULL AND activated_stake_lamports > 0 OR delinquent IS NULL OR delinquent = 0)"));
+            let _ = idx;
         }
 
         let where_clause = if conditions.is_empty() {
@@ -545,7 +549,7 @@ impl FirstSeenStore {
         Ok(result)
     }
 
-    pub fn count_validators(&self, query: Option<&str>, delinquent: Option<bool>) -> Result<u64> {
+    pub fn count_validators(&self, query: Option<&str>, delinquent: Option<bool>, exclude_zero_stake: bool) -> Result<u64> {
         let mut conditions = Vec::new();
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         let mut idx = 1u32;
@@ -559,8 +563,11 @@ impl FirstSeenStore {
         if let Some(d) = delinquent {
             conditions.push(format!("delinquent = ?{idx}"));
             params.push(Box::new(d));
-            #[allow(unused_assignments)]
-            { idx += 1; }
+            idx += 1;
+        }
+        if exclude_zero_stake {
+            conditions.push(format!("(activated_stake_lamports IS NOT NULL AND activated_stake_lamports > 0 OR delinquent IS NULL OR delinquent = 0)"));
+            let _ = idx;
         }
 
         let where_clause = if conditions.is_empty() {

@@ -1,9 +1,9 @@
 import { useDeferredValue, useState } from 'react'
-import type { ValidatorMeta } from '../api/types'
 import { useValidators } from '../hooks/useValidators'
 import { PubkeyCell } from './PubkeyCell'
 import { Spinner } from './Spinner'
 import { StatusFilter } from './StatusFilter'
+import type { ValidatorMeta } from '../api/types'
 
 type StatusValue = 'active' | 'delinquent' | 'all'
 
@@ -70,7 +70,9 @@ export function ValidatorsList({ onBack, onValidatorClick }: Props) {
     setOffset(0)
   }
 
-  const { data, isLoading, error } = useValidators(deferredSearch, statusToDelinquent(status), PAGE_SIZE, offset)
+  const { data, isLoading, error } = useValidators(deferredSearch, statusToDelinquent(status), status !== 'active', PAGE_SIZE, offset)
+
+  const validators = data?.validators ?? []
 
   const total = data?.total ?? 0
   const start = offset + 1
@@ -98,6 +100,7 @@ export function ValidatorsList({ onBack, onValidatorClick }: Props) {
         <StatusFilter value={status} onChange={setStatus} />
       </div>
 
+      {/* Hidden count notice */}
       {error && (
         <div className="text-red-400 text-[0.82rem] mb-4">{error}</div>
       )}
@@ -121,10 +124,10 @@ export function ValidatorsList({ onBack, onValidatorClick }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {(data?.validators ?? []).map((v) => (
+                {validators.map((v) => (
                   <ValidatorRow key={v.vote_identity} v={v} onValidatorClick={onValidatorClick} />
                 ))}
-                {data && data.validators.length === 0 && (
+                {data && validators.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-text-muted text-[0.82rem]">
                       No validators found.

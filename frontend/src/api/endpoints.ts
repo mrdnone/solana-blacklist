@@ -43,10 +43,11 @@ export const fetchVoteDetail = (target: string) =>
 export const submitVote = (req: VoteSubmitRequest) =>
   apiPost<VoteSubmitResponse>('/votes', req)
 
-export const fetchValidators = (q?: string, delinquent?: boolean, limit?: number, offset?: number) => {
+export const fetchValidators = (q?: string, delinquent?: boolean, excludeZeroStake?: boolean, limit?: number, offset?: number) => {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (delinquent != null) params.set('delinquent', String(delinquent))
+  if (excludeZeroStake) params.set('exclude_zero_stake', 'true')
   if (limit != null) params.set('limit', String(limit))
   if (offset != null) params.set('offset', String(offset))
   const qs = params.toString()
