@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use utoipa::{OpenApi, ToSchema};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
@@ -782,7 +783,7 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
+    let api_router = Router::new()
         .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", ApiDoc::openapi()))
         .route("/sources", get(api_list_sources))
         .route("/blacklist", get(api_get_blacklist))
@@ -801,6 +802,17 @@ async fn main() {
         .route("/meridian/info", get(meridian_info))
         .layer(cors)
         .with_state(state);
+
+    // Serve the frontend SPA under /blacklist/. The ServeDir fallback sends
+    // index.html for any path that doesn't match a real file, so React Router
+    // can handle client-side routing on hard refresh or direct links.
+    let app = Router::new()
+        .nest("/", api_router)
+        .nest_service(
+            "/blacklist",
+            ServeDir::new("frontend/dist")
+                .fallback(ServeFile::new("frontend/dist/index.html")),
+        );
 
     let addr = "0.0.0.0:3000";
     println!(
