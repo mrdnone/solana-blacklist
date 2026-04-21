@@ -51,7 +51,7 @@ type Page =
   | { kind: 'home' }
   | { kind: 'sources' }
   | { kind: 'suggest-source' }
-  | { kind: 'meridian' }
+  | { kind: 'meridian'; initialTarget?: string }
   | { kind: 'validator'; pubkey: string }
   | { kind: 'validators' }
   | { kind: 'epochs' }
@@ -120,7 +120,7 @@ export default function App() {
         return <SourcesPage onBack={navigateHome} onSuggestSource={navigateToSuggestSource} />
 
       case 'meridian':
-        return <MeridianVoting onBack={navigateHome} />
+        return <MeridianVoting onBack={navigateHome} initialTarget={page.initialTarget} />
 
       case 'validator':
         return (
@@ -131,6 +131,7 @@ export default function App() {
               error={validatorDetail.error}
               onBack={navigateHome}
               onEpochClick={navigateToEpochDetail}
+              onVote={(voteIdentity) => setPage({ kind: 'meridian', initialTarget: voteIdentity })}
             />
           </main>
         )
@@ -235,7 +236,6 @@ export default function App() {
           onSources={navigateToSources}
           onEpochs={navigateToEpochs}
           onValidators={navigateToValidators}
-          onMeridian={navigateToMeridian}
         />
 
         {renderPage()}

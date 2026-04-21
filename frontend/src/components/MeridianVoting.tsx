@@ -6,13 +6,14 @@ import { useVotes } from '../hooks/useVotes'
 
 interface Props {
   onBack: () => void
+  initialTarget?: string
 }
 
-export function MeridianVoting({ onBack }: Props) {
+export function MeridianVoting({ onBack, initialTarget }: Props) {
   const votes = useVotes()
 
   // Vote submission state
-  const [target, setTarget] = useState('')
+  const [target, setTarget] = useState(initialTarget ?? '')
   const [showInstructions, setShowInstructions] = useState(false)
   const [voterIdentity, setVoterIdentity] = useState('')
   const [signature, setSignature] = useState('')

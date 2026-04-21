@@ -8,6 +8,7 @@ interface Props {
   error: string | null
   onBack: () => void
   onEpochClick: (epoch: number) => void
+  onVote?: (voteIdentity: string) => void
 }
 
 function formatLamports(lamports?: number): string {
@@ -63,7 +64,7 @@ function EpochRow({ snapshot, onEpochClick }: { snapshot: ValidatorEpochSnapshot
   )
 }
 
-export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick }: Props) {
+export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, onVote }: Props) {
   if (isLoading) return <Spinner message="Loading validator details..." />
 
   if (error) {
@@ -83,16 +84,30 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick }
 
   return (
     <div className="space-y-6">
-      {/* Back button */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-[0.75rem] tracking-[1px] uppercase font-mono text-text-muted hover:text-accent-green transition-colors"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-        </svg>
-        Back to Blacklist
-      </button>
+      {/* Back button + actions row */}
+      <div className="flex items-center justify-between gap-4">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-[0.75rem] tracking-[1px] uppercase font-mono text-text-muted hover:text-accent-green transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Back
+        </button>
+
+        {onVote && (
+          <button
+            onClick={() => onVote(data.vote_identity)}
+            className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-amber-500/20 bg-amber-500/[0.06] rounded-full px-4 py-2 text-amber-400/80 hover:text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 transition-all duration-300"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+            Vote to Blacklist
+          </button>
+        )}
+      </div>
 
       {/* Validator header */}
       <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 space-y-4">
