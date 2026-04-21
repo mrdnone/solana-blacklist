@@ -118,6 +118,7 @@ export interface Vote {
   target_vote_pubkey: string
   signature: string
   voted_at: string
+  reason?: string
 }
 
 export interface VoteTarget {
@@ -142,6 +143,12 @@ export interface VoteSubmitRequest {
   voter_identity: string
   target_vote_pubkey: string
   signature: string
+  voted_at_ts: number
+  reason: string
+}
+
+export interface AdminVotesResponse {
+  votes: Vote[]
 }
 
 export interface VoteSubmitResponse {

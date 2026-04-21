@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { submitVote } from '../api/endpoints'
 import type { VoteDetailResponse } from '../api/types'
 import { useVoteDetail } from '../hooks/useVoteDetail'
 import { useVotes } from '../hooks/useVotes'
+
+const PRESET_REASONS = [
+  'Sandwich attacks / MEV exploitation targeting delegators',
+  'Consistently high commission without notice',
+  'Validator downtime / chronic delinquency',
+  'Identity misrepresentation or impersonation',
+  'Collusion with other validators to manipulate consensus',
+  'Custom',
+] as const
+
+type PresetReason = (typeof PRESET_REASONS)[number]
 
 interface Props {
   onBack: () => void
@@ -15,27 +26,55 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
   // Vote submission state
   const [target, setTarget] = useState(initialTarget ?? '')
   const [showInstructions, setShowInstructions] = useState(false)
+  const [voteTimestamp, setVoteTimestamp] = useState<number | null>(null)
   const [voterIdentity, setVoterIdentity] = useState('')
   const [signature, setSignature] = useState('')
+  const [selectedReason, setSelectedReason] = useState<PresetReason | null>(null)
+  const [customReason, setCustomReason] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
   const [submitResult, setSubmitResult] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const effectiveReason =
+    selectedReason === 'Custom' ? customReason.trim() : (selectedReason ?? '')
+  const reasonValid = effectiveReason.length > 0
+
+  // Live countdown for the 10-minute signing window
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (voteTimestamp === null) {
+      setSecondsLeft(null)
+      return
+    }
+    const tick = () => {
+      const remaining = (voteTimestamp + 600) - Math.floor(Date.now() / 1000)
+      setSecondsLeft(Math.max(0, remaining))
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [voteTimestamp])
 
   // Detail expansion
   const [expandedTarget, setExpandedTarget] = useState<string | null>(null)
   const voteDetail = useVoteDetail(expandedTarget)
 
-  const canonicalMessage = target ? `meridian:blacklist:${target}` : ''
+  const canonicalMessage =
+    target && voteTimestamp ? `meridian:blacklist:${target}:${voteTimestamp}` : ''
 
   const handleOpenInstructions = () => {
     if (!target.trim()) return
+    setVoteTimestamp(Math.floor(Date.now() / 1000))
+    setSelectedReason(null)
+    setCustomReason('')
     setShowInstructions(true)
     setSubmitResult(null)
     setSubmitError(null)
   }
 
   const handleSubmit = async () => {
-    if (!voterIdentity.trim() || !signature.trim() || !target.trim()) return
+    if (!voterIdentity.trim() || !signature.trim() || !target.trim() || !reasonValid || secondsLeft === 0) return
     setSubmitLoading(true)
     setSubmitResult(null)
     setSubmitError(null)
@@ -44,10 +83,15 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
         voter_identity: voterIdentity.trim(),
         target_vote_pubkey: target.trim(),
         signature: signature.trim(),
+        voted_at_ts: voteTimestamp!,
+        reason: effectiveReason,
       })
       setSubmitResult(res.inserted ? 'Vote recorded successfully!' : 'Vote already exists.')
       setVoterIdentity('')
       setSignature('')
+      setSelectedReason(null)
+      setCustomReason('')
+      setVoteTimestamp(null)
       setShowInstructions(false)
       votes.refetch()
     } catch (err: unknown) {
@@ -90,12 +134,12 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
       <Section title="How It Works">
         <ul className="list-disc list-inside space-y-2">
           <li>
-            Validators sign a canonical off-chain message: <Code>meridian:blacklist:&lt;target_pubkey&gt;</Code>
+            Validators sign a canonical off-chain message: <Code>meridian:blacklist:&lt;target_pubkey&gt;:&lt;timestamp&gt;</Code>
           </li>
           <li>Paste the signature proof along with your validator identity pubkey.</li>
           <li>
             Once a target reaches <strong className="text-amber-300">{votes.data?.threshold ?? 10} votes</strong>, it
-            gets added to the blacklist.
+            will be reviewed by Meridian and may be added to the blacklist.
           </li>
         </ul>
       </Section>
@@ -114,6 +158,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                 onChange={(e) => {
                   setTarget(e.target.value)
                   setShowInstructions(false)
+                  setVoteTimestamp(null)
                 }}
                 placeholder="Enter validator vote account pubkey..."
                 className="flex-1 bg-[#080810] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors"
@@ -151,6 +196,27 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                     </svg>
                   </button>
                 </div>
+                {voteTimestamp && secondsLeft !== null && (
+                  <div className="flex items-center gap-3">
+                    <p className={`text-[0.72rem] font-mono ${secondsLeft <= 60 ? 'text-rose-400' : 'text-text-muted'}`}>
+                      {secondsLeft > 0
+                        ? `Expires in ${Math.floor(secondsLeft / 60)}m ${secondsLeft % 60}s`
+                        : 'Expired — refresh to get a new timestamp'}
+                    </p>
+                    {secondsLeft <= 60 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoteTimestamp(Math.floor(Date.now() / 1000))
+                          setSignature('')
+                        }}
+                        className="text-[0.70rem] font-mono tracking-[1px] uppercase px-2.5 py-1 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      >
+                        Refresh
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Step 2: CLI command */}
@@ -185,10 +251,42 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                 />
               </div>
 
+              {/* Step 5: Reason */}
+              <div className="space-y-2">
+                <label className="block text-[0.78rem] text-text-muted">
+                  5. Reason <span className="text-rose-400">*</span>
+                </label>
+                <div className="space-y-1.5">
+                  {PRESET_REASONS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setSelectedReason(r)}
+                      className={`w-full text-left rounded-lg border px-4 py-2.5 text-[0.82rem] font-mono transition-colors ${
+                        selectedReason === r
+                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                          : 'border-white/[0.06] bg-[#080810] text-text-secondary hover:border-white/[0.12]'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                {selectedReason === 'Custom' && (
+                  <textarea
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    placeholder="Describe why this validator should be blacklisted..."
+                    rows={3}
+                    className="w-full bg-[#080810] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors resize-none"
+                  />
+                )}
+              </div>
+
               {/* Submit */}
               <button
                 onClick={handleSubmit}
-                disabled={submitLoading || !voterIdentity.trim() || !signature.trim()}
+                disabled={submitLoading || !voterIdentity.trim() || !signature.trim() || !reasonValid || secondsLeft === 0}
                 className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono bg-amber-500/15 border border-amber-500/30 rounded-lg px-6 py-2.5 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {submitLoading ? 'Submitting...' : 'Submit Vote'}
@@ -304,11 +402,16 @@ function VoteDetailPanel({
   return (
     <div className="ml-4 mt-1 rounded-lg border border-white/[0.04] bg-[#0a0a14] p-4 space-y-2">
       {detail.votes.map((v) => (
-        <div key={v.signature} className="flex items-center justify-between text-[0.78rem]">
-          <span className="font-mono text-text-secondary" title={v.voter_identity}>
-            {v.voter_identity.slice(0, 6)}...{v.voter_identity.slice(-4)}
-          </span>
-          <span className="text-text-muted text-[0.72rem]">{new Date(v.voted_at).toLocaleDateString()}</span>
+        <div key={v.signature} className="space-y-0.5">
+          <div className="flex items-center justify-between text-[0.78rem]">
+            <span className="font-mono text-text-secondary" title={v.voter_identity}>
+              {v.voter_identity.slice(0, 6)}...{v.voter_identity.slice(-4)}
+            </span>
+            <span className="text-text-muted text-[0.72rem]">{new Date(v.voted_at).toLocaleString()}</span>
+          </div>
+          {v.reason && (
+            <p className="text-[0.72rem] text-text-muted italic pl-1">{v.reason}</p>
+          )}
         </div>
       ))}
     </div>

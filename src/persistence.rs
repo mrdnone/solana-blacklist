@@ -79,12 +79,27 @@ pub struct Vote {
     pub target_vote_pubkey: String,
     pub signature: String,
     pub voted_at: String,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct VoteTarget {
     pub target_vote_pubkey: String,
     pub vote_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeridianBlacklistEntry {
+    pub vote_identity: String,
+    pub added_at: String,
+    pub added_by: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeridianRejectedEntry {
+    pub vote_identity: String,
+    pub rejected_at: String,
+    pub rejected_by: String,
 }
 
 pub struct FirstSeenStore {
@@ -195,6 +210,28 @@ impl FirstSeenStore {
             CREATE INDEX IF NOT EXISTS idx_votes_target ON votes (target_vote_pubkey);",
         )
         .context("failed to create votes table")?;
+
+        // Add reason column to votes (idempotent)
+        if let Err(e) = conn.execute_batch("ALTER TABLE votes ADD COLUMN reason TEXT") {
+            if !e.to_string().contains("duplicate column") {
+                return Err(e).context("failed to add reason column to votes");
+            }
+        }
+
+        // Meridian admin tables
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS meridian_blacklist (
+                vote_identity TEXT PRIMARY KEY,
+                added_at      TEXT NOT NULL,
+                added_by      TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS meridian_rejected (
+                vote_identity TEXT PRIMARY KEY,
+                rejected_at   TEXT NOT NULL,
+                rejected_by   TEXT NOT NULL
+            );",
+        )
+        .context("failed to create meridian admin tables")?;
 
         Ok(Self { conn })
     }
@@ -587,13 +624,14 @@ impl FirstSeenStore {
     /// Insert a vote. Returns true if the row was actually inserted (false if duplicate).
     pub fn insert_vote(&self, vote: &Vote) -> Result<bool> {
         let changed = self.conn.execute(
-            "INSERT OR IGNORE INTO votes (voter_identity, target_vote_pubkey, signature, voted_at)
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR IGNORE INTO votes (voter_identity, target_vote_pubkey, signature, voted_at, reason)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![
                 vote.voter_identity,
                 vote.target_vote_pubkey,
                 vote.signature,
                 vote.voted_at,
+                vote.reason,
             ],
         )?;
         Ok(changed > 0)
@@ -602,7 +640,7 @@ impl FirstSeenStore {
     /// Get all votes for a specific target.
     pub fn get_votes_for_target(&self, target: &str) -> Result<Vec<Vote>> {
         let mut stmt = self.conn.prepare(
-            "SELECT voter_identity, target_vote_pubkey, signature, voted_at
+            "SELECT voter_identity, target_vote_pubkey, signature, voted_at, reason
              FROM votes WHERE target_vote_pubkey = ?1 ORDER BY voted_at",
         )?;
         let rows = stmt.query_map(rusqlite::params![target], |row| {
@@ -611,6 +649,7 @@ impl FirstSeenStore {
                 target_vote_pubkey: row.get(1)?,
                 signature: row.get(2)?,
                 voted_at: row.get(3)?,
+                reason: row.get(4)?,
             })
         })?;
         let mut result = Vec::new();
@@ -621,10 +660,13 @@ impl FirstSeenStore {
     }
 
     /// List all vote targets with their vote counts, ordered descending.
+    /// Excludes targets that have been explicitly rejected by an admin.
     pub fn list_vote_targets(&self) -> Result<Vec<VoteTarget>> {
         let mut stmt = self.conn.prepare(
             "SELECT target_vote_pubkey, COUNT(*) as vote_count
-             FROM votes GROUP BY target_vote_pubkey ORDER BY vote_count DESC",
+             FROM votes
+             WHERE target_vote_pubkey NOT IN (SELECT vote_identity FROM meridian_rejected)
+             GROUP BY target_vote_pubkey ORDER BY vote_count DESC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(VoteTarget {
@@ -639,11 +681,16 @@ impl FirstSeenStore {
         Ok(result)
     }
 
-    /// Get target pubkeys that have ≥ threshold votes.
+    /// Get target pubkeys that have ≥ threshold votes (excluding rejected) UNION manually approved.
+    /// Manually approved entries in meridian_rejected are excluded even if also in meridian_blacklist.
     pub fn get_blacklisted_by_votes(&self, threshold: u64) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT target_vote_pubkey FROM votes
-             GROUP BY target_vote_pubkey HAVING COUNT(*) >= ?1",
+             WHERE target_vote_pubkey NOT IN (SELECT vote_identity FROM meridian_rejected)
+             GROUP BY target_vote_pubkey HAVING COUNT(*) >= ?1
+             UNION
+             SELECT vote_identity FROM meridian_blacklist
+             WHERE vote_identity NOT IN (SELECT vote_identity FROM meridian_rejected)",
         )?;
         let rows = stmt.query_map(rusqlite::params![threshold], |row| row.get(0))?;
         let mut result = Vec::new();
@@ -651,6 +698,82 @@ impl FirstSeenStore {
             result.push(row?);
         }
         Ok(result)
+    }
+
+    // ── Admin voting methods ───────────────────────────────────────────────
+
+    /// Get all votes, ordered by voted_at descending (admin endpoint).
+    pub fn get_all_votes(&self) -> Result<Vec<Vote>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT voter_identity, target_vote_pubkey, signature, voted_at, reason
+             FROM votes ORDER BY voted_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Vote {
+                voter_identity: row.get(0)?,
+                target_vote_pubkey: row.get(1)?,
+                signature: row.get(2)?,
+                voted_at: row.get(3)?,
+                reason: row.get(4)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Get all votes where voter_identity OR target_vote_pubkey matches pubkey.
+    pub fn get_votes_by_validator(&self, pubkey: &str) -> Result<Vec<Vote>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT voter_identity, target_vote_pubkey, signature, voted_at, reason
+             FROM votes WHERE voter_identity = ?1 OR target_vote_pubkey = ?1
+             ORDER BY voted_at DESC",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![pubkey], |row| {
+            Ok(Vote {
+                voter_identity: row.get(0)?,
+                target_vote_pubkey: row.get(1)?,
+                signature: row.get(2)?,
+                voted_at: row.get(3)?,
+                reason: row.get(4)?,
+            })
+        })?;
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// Manually approve a target — insert into meridian_blacklist.
+    pub fn admin_approve_target(&self, vote_identity: &str, added_by: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meridian_blacklist (vote_identity, added_at, added_by)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![vote_identity, Utc::now().to_rfc3339(), added_by],
+        )?;
+        Ok(())
+    }
+
+    /// Reject a target after review — insert into meridian_rejected.
+    pub fn admin_reject_target(&self, vote_identity: &str, rejected_by: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meridian_rejected (vote_identity, rejected_at, rejected_by)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![vote_identity, Utc::now().to_rfc3339(), rejected_by],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a validator from the manual meridian_blacklist. Returns true if a row was deleted.
+    pub fn admin_remove_from_blacklist(&self, vote_identity: &str) -> Result<bool> {
+        let changed = self.conn.execute(
+            "DELETE FROM meridian_blacklist WHERE vote_identity = ?1",
+            rusqlite::params![vote_identity],
+        )?;
+        Ok(changed > 0)
     }
 
     /// Look up the vote_identity for a given identity/node_pubkey in the validators table.
@@ -1059,7 +1182,7 @@ mod tests {
         ];
         store.insert_epoch_snapshots(&snapshots).unwrap();
 
-        let results = store.get_epoch_snapshots(750).unwrap();
+        let results = store.get_epoch_snapshots(750, None, None, 500, 0).unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].vote_identity, "AAA111");
         assert_eq!(results[0].epoch_credits, Some(432000));
@@ -1077,7 +1200,7 @@ mod tests {
         store.insert_epoch_snapshots(&snapshots).unwrap();
         store.insert_epoch_snapshots(&snapshots).unwrap();
 
-        let results = store.get_epoch_snapshots(750).unwrap();
+        let results = store.get_epoch_snapshots(750, None, None, 500, 0).unwrap();
         assert_eq!(results.len(), 1);
 
         let _ = std::fs::remove_file(&path);
@@ -1194,6 +1317,7 @@ mod tests {
             target_vote_pubkey: target.to_string(),
             signature: format!("sig_{voter}_{target}"),
             voted_at: "2026-04-17T12:00:00Z".to_string(),
+            reason: None,
         }
     }
 

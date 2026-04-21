@@ -6,20 +6,97 @@ use std::time::Duration;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
+use utoipa::{OpenApi, ToSchema};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+use utoipa_swagger_ui::SwaggerUi;
 
 use solana_blacklist::blacklist::{
     BlacklistCollector, BlacklistOptions, BlacklistResult, BlacklistSource,
     default_blacklist_sources,
 };
 use solana_blacklist::persistence::FirstSeenStore;
+
+// ── OpenAPI doc ───────────────────────────────────────────────────────────────
+
+/// Vote cast by a validator
+#[derive(Serialize, ToSchema)]
+struct VoteSchema {
+    voter_identity: String,
+    target_vote_pubkey: String,
+    signature: String,
+    voted_at: String,
+    reason: Option<String>,
+}
+
+/// A target with its vote count
+#[derive(Serialize, ToSchema)]
+struct VoteTargetSchema {
+    target_vote_pubkey: String,
+    vote_count: u64,
+}
+
+/// Request body for submitting a vote
+#[derive(Deserialize, ToSchema)]
+#[allow(dead_code)]
+struct VoteSubmitSchema {
+    voter_identity: String,
+    target_vote_pubkey: String,
+    signature: String,
+    voted_at_ts: i64,
+    reason: String,
+}
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Solana Blacklist API",
+        description = "Aggregated Solana validator blacklist with community voting (Meridian).",
+        version = "1.0.0"
+    ),
+    paths(
+        api_list_sources,
+        api_get_blacklist,
+        api_get_pubkey,
+        api_votes_list,
+        api_vote_submit,
+        api_vote_detail,
+        api_admin_list_votes,
+        api_admin_votes_by_validator,
+        api_admin_approve,
+        api_admin_reject,
+        api_admin_remove_blacklist,
+    ),
+    components(
+        schemas(VoteSchema, VoteTargetSchema, VoteSubmitSchema)
+    ),
+    tags(
+        (name = "Blacklist", description = "Aggregated blacklist endpoints"),
+        (name = "Meridian", description = "Community validator voting"),
+        (name = "Admin", description = "Admin operations — require X-Admin-Key header"),
+    ),
+    modifiers(&SecurityAddon),
+)]
+struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "admin_key",
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("x-admin-key"))),
+        );
+    }
+}
 
 // ── Shared application state ──────────────────────────────────────────────────
 
@@ -28,6 +105,7 @@ struct AppState {
     sources: HashMap<String, BlacklistSource>,
     cache: Arc<RwLock<Option<BlacklistResult>>>,
     store: Arc<Mutex<FirstSeenStore>>,
+    admin_key: Option<String>,
 }
 
 // ── Error handling ────────────────────────────────────────────────────────────
@@ -49,6 +127,22 @@ impl<E: Into<anyhow::Error>> From<E> for ApiError {
 
 type ApiResult<T> = Result<T, ApiError>;
 
+// ── Admin auth helper ────────────────────────────────────────────────────────
+
+fn require_admin(headers: &HeaderMap, admin_key: &Option<String>) -> Result<(), Response> {
+    let Some(key) = admin_key else {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "admin not configured"}))).into_response());
+    };
+    let provided = headers
+        .get("x-admin-key")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if provided != key {
+        return Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized"}))).into_response());
+    }
+    Ok(())
+}
+
 // ── Query parameters ──────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Default)]
@@ -58,7 +152,12 @@ struct BlacklistQuery {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
-async fn list_sources(State(state): State<AppState>) -> impl IntoResponse {
+#[utoipa::path(
+    get, path = "/sources",
+    tag = "Blacklist",
+    responses((status = 200, description = "Map of configured blacklist sources"))
+)]
+async fn api_list_sources(State(state): State<AppState>) -> impl IntoResponse {
     let mut sources = serde_json::to_value(&state.sources).unwrap();
     // Include meridian as a known source even though it's not in the static .json config
     if let serde_json::Value::Object(ref mut map) = sources {
@@ -71,7 +170,16 @@ async fn list_sources(State(state): State<AppState>) -> impl IntoResponse {
     Json(sources)
 }
 
-async fn get_blacklist(
+#[utoipa::path(
+    get, path = "/blacklist",
+    tag = "Blacklist",
+    params(("source" = Option<String>, Query, description = "Filter by source name")),
+    responses(
+        (status = 200, description = "Blacklisted pubkeys"),
+        (status = 503, description = "Data not yet available"),
+    )
+)]
+async fn api_get_blacklist(
     State(state): State<AppState>,
     Query(params): Query<BlacklistQuery>,
 ) -> ApiResult<Response> {
@@ -119,7 +227,17 @@ async fn get_blacklist(
     Ok(Json(result.clone()).into_response())
 }
 
-async fn get_pubkey(
+#[utoipa::path(
+    get, path = "/blacklist/{pubkey}",
+    tag = "Blacklist",
+    params(("pubkey" = String, Path, description = "Vote account or identity pubkey")),
+    responses(
+        (status = 200, description = "Pubkey blacklist status"),
+        (status = 400, description = "Invalid pubkey"),
+        (status = 503, description = "Data not yet available"),
+    )
+)]
+async fn api_get_pubkey(
     State(state): State<AppState>,
     Path(pubkey): Path<String>,
 ) -> ApiResult<Response> {
@@ -303,7 +421,16 @@ async fn get_epoch_detail(
 
 // ── Meridian voting endpoints ────────────────────────────────────────────────
 
-async fn vote_submit(
+#[utoipa::path(
+    post, path = "/votes",
+    tag = "Meridian",
+    request_body = VoteSubmitSchema,
+    responses(
+        (status = 200, description = "Vote accepted"),
+        (status = 400, description = "Invalid request or stale timestamp"),
+    )
+)]
+async fn api_vote_submit(
     State(state): State<AppState>,
     Json(req): Json<solana_blacklist::meridian::VoteRequest>,
 ) -> ApiResult<Response> {
@@ -314,6 +441,12 @@ async fn vote_submit(
     }
     if let Err(reason) = solana_blacklist::utils::validate_solana_pubkey(&req.target_vote_pubkey) {
         let body = json!({ "error": format!("invalid target_vote_pubkey: {}", reason) });
+        return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
+    }
+
+    // Reason is required
+    if req.reason.trim().is_empty() {
+        let body = json!({ "error": "reason is required" });
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
@@ -338,11 +471,16 @@ async fn vote_submit(
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
-    // Verify ed25519 signature
+    // Verify ed25519 signature — pass the known-valid identity into verify_vote
+    // so the active-validator guard is enforced inside the function itself.
+    let active_identities =
+        std::collections::HashSet::from([req.voter_identity.clone()]);
     if let Err(e) = solana_blacklist::meridian::verify_vote(
         &req.voter_identity,
         &req.target_vote_pubkey,
         &req.signature,
+        req.voted_at_ts,
+        &active_identities,
     ) {
         let body = json!({ "error": format!("signature verification failed: {e}") });
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
@@ -353,13 +491,19 @@ async fn vote_submit(
         target_vote_pubkey: req.target_vote_pubkey,
         signature: req.signature,
         voted_at: chrono::Utc::now().to_rfc3339(),
+        reason: Some(req.reason),
     };
     let inserted = store.insert_vote(&vote)?;
 
     Ok(Json(json!({ "status": "ok", "inserted": inserted })).into_response())
 }
 
-async fn votes_list(State(state): State<AppState>) -> ApiResult<Response> {
+#[utoipa::path(
+    get, path = "/votes",
+    tag = "Meridian",
+    responses((status = 200, description = "All vote targets with counts", body = Vec<VoteTargetSchema>))
+)]
+async fn api_votes_list(State(state): State<AppState>) -> ApiResult<Response> {
     let store = state.store.lock().unwrap();
     let targets = store.list_vote_targets()?;
     Ok(Json(json!({
@@ -369,7 +513,16 @@ async fn votes_list(State(state): State<AppState>) -> ApiResult<Response> {
     .into_response())
 }
 
-async fn vote_detail(
+#[utoipa::path(
+    get, path = "/votes/{target}",
+    tag = "Meridian",
+    params(("target" = String, Path, description = "Target vote account pubkey")),
+    responses(
+        (status = 200, description = "Vote detail for target", body = Vec<VoteSchema>),
+        (status = 400, description = "Invalid pubkey"),
+    )
+)]
+async fn api_vote_detail(
     State(state): State<AppState>,
     Path(target): Path<String>,
 ) -> ApiResult<Response> {
@@ -412,6 +565,122 @@ async fn meridian_info() -> impl IntoResponse {
             "GET /meridian/info": "This endpoint"
         }
     }))
+}
+
+// ── Admin handlers ───────────────────────────────────────────────────────────
+
+#[utoipa::path(
+    get, path = "/admin/votes",
+    tag = "Admin",
+    security(("admin_key" = [])),
+    responses(
+        (status = 200, description = "All votes ever cast", body = Vec<VoteSchema>),
+        (status = 401, description = "Unauthorized"),
+        (status = 503, description = "Admin not configured"),
+    )
+)]
+async fn api_admin_list_votes(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Response {
+    if let Err(r) = require_admin(&headers, &state.admin_key) { return r; }
+    let store = state.store.lock().unwrap();
+    match store.get_all_votes() {
+        Ok(votes) => Json(json!({ "votes": votes })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[utoipa::path(
+    get, path = "/admin/votes/by-validator/{pubkey}",
+    tag = "Admin",
+    security(("admin_key" = [])),
+    params(("pubkey" = String, Path, description = "Validator identity or vote account pubkey")),
+    responses(
+        (status = 200, description = "Votes involving this validator", body = Vec<VoteSchema>),
+        (status = 401, description = "Unauthorized"),
+    )
+)]
+async fn api_admin_votes_by_validator(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(pubkey): Path<String>,
+) -> Response {
+    if let Err(r) = require_admin(&headers, &state.admin_key) { return r; }
+    let store = state.store.lock().unwrap();
+    match store.get_votes_by_validator(&pubkey) {
+        Ok(votes) => Json(json!({ "votes": votes })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[utoipa::path(
+    post, path = "/admin/votes/{target}/approve",
+    tag = "Admin",
+    security(("admin_key" = [])),
+    params(("target" = String, Path, description = "Vote account pubkey to manually approve")),
+    responses(
+        (status = 200, description = "Approved — added to manual blacklist"),
+        (status = 401, description = "Unauthorized"),
+    )
+)]
+async fn api_admin_approve(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(target): Path<String>,
+) -> Response {
+    if let Err(r) = require_admin(&headers, &state.admin_key) { return r; }
+    let store = state.store.lock().unwrap();
+    match store.admin_approve_target(&target, "admin") {
+        Ok(()) => Json(json!({ "status": "approved", "vote_identity": target })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[utoipa::path(
+    post, path = "/admin/votes/{target}/reject",
+    tag = "Admin",
+    security(("admin_key" = [])),
+    params(("target" = String, Path, description = "Vote account pubkey to reject")),
+    responses(
+        (status = 200, description = "Rejected — excluded from threshold list"),
+        (status = 401, description = "Unauthorized"),
+    )
+)]
+async fn api_admin_reject(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(target): Path<String>,
+) -> Response {
+    if let Err(r) = require_admin(&headers, &state.admin_key) { return r; }
+    let store = state.store.lock().unwrap();
+    match store.admin_reject_target(&target, "admin") {
+        Ok(()) => Json(json!({ "status": "rejected", "vote_identity": target })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[utoipa::path(
+    delete, path = "/admin/blacklist/{pubkey}",
+    tag = "Admin",
+    security(("admin_key" = [])),
+    params(("pubkey" = String, Path, description = "Vote account pubkey to remove from manual blacklist")),
+    responses(
+        (status = 200, description = "Removed from manual blacklist"),
+        (status = 401, description = "Unauthorized"),
+    )
+)]
+async fn api_admin_remove_blacklist(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Path(pubkey): Path<String>,
+) -> Response {
+    if let Err(r) = require_admin(&headers, &state.admin_key) { return r; }
+    let store = state.store.lock().unwrap();
+    match store.admin_remove_from_blacklist(&pubkey) {
+        Ok(removed) => Json(json!({ "removed": removed, "vote_identity": pubkey })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
 }
 
 // ── Background collector ─────────────────────────────────────────────────────
@@ -505,6 +774,7 @@ async fn main() {
         sources,
         cache,
         store,
+        admin_key: std::env::var("ADMIN_KEY").ok(),
     };
 
     let cors = CorsLayer::new()
@@ -513,16 +783,21 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .route("/sources", get(list_sources))
-        .route("/blacklist", get(get_blacklist))
-        .route("/blacklist/{pubkey}", get(get_pubkey))
+        .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", ApiDoc::openapi()))
+        .route("/sources", get(api_list_sources))
+        .route("/blacklist", get(api_get_blacklist))
+        .route("/blacklist/{pubkey}", get(api_get_pubkey))
         .route("/validators", get(list_validators))
         .route("/validators/{pubkey}", get(get_validator_detail))
         .route("/epochs", get(list_epochs))
         .route("/epochs/{epoch}", get(get_epoch_detail))
-        .route("/votes", post(vote_submit).get(votes_list))
-        .route("/votes/{target}", get(vote_detail))
-
+        .route("/votes", post(api_vote_submit).get(api_votes_list))
+        .route("/votes/{target}", get(api_vote_detail))
+        .route("/admin/votes", get(api_admin_list_votes))
+        .route("/admin/votes/by-validator/{pubkey}", get(api_admin_votes_by_validator))
+        .route("/admin/votes/{target}/approve", post(api_admin_approve))
+        .route("/admin/votes/{target}/reject", post(api_admin_reject))
+        .route("/admin/blacklist/{pubkey}", delete(api_admin_remove_blacklist))
         .route("/meridian/info", get(meridian_info))
         .layer(cors)
         .with_state(state);
