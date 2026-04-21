@@ -33,7 +33,7 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
       {/* Progress bar for refetches */}
       {isLoading && !isFirstLoad && (
         <div className="h-px w-full bg-white/[0.04] overflow-hidden">
-          <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-accent-green/40 to-transparent animate-progress" />
+          <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-rose-400/40 to-transparent animate-progress" />
         </div>
       )}
 
@@ -61,7 +61,7 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
                 Name
               </th>
               <th className="px-5 py-3 text-[0.68rem] font-mono font-normal tracking-[3px] uppercase text-text-secondary">
-                Pubkey
+                Vote Account
               </th>
               <th className="px-5 py-3 text-[0.68rem] font-mono font-normal tracking-[3px] uppercase text-text-secondary">
                 Sources
