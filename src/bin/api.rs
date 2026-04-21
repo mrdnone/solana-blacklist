@@ -128,6 +128,21 @@ async fn get_pubkey(
         return Ok((StatusCode::BAD_REQUEST, Json(body)).into_response());
     }
 
+    // Resolve identity pubkey → vote account if needed.
+    // find_vote_identity_for matches vote_identity, identity, or node_pubkey.
+    let resolved_vote_pubkey = {
+        let store = state.store.lock().unwrap();
+        store.find_vote_identity_for(&pubkey).unwrap_or(None)
+    };
+    // The canonical vote pubkey to search in the blacklist cache.
+    let vote_pubkey = resolved_vote_pubkey.as_deref().unwrap_or(&pubkey);
+    // If we resolved a different key, the input was an identity key.
+    let identity_input = if resolved_vote_pubkey.is_some() && vote_pubkey != pubkey {
+        Some(&pubkey)
+    } else {
+        None
+    };
+
     let guard = state.cache.read().await;
     let Some(result) = guard.as_ref() else {
         let body =
@@ -135,10 +150,20 @@ async fn get_pubkey(
         return Ok((StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response());
     };
 
-    match result.entries.iter().find(|e| e.pubkey == pubkey) {
+    match result.entries.iter().find(|e| e.pubkey == vote_pubkey) {
         Some(entry) => {
+            // Look up identity from DB for extra context.
+            let identity = {
+                let store = state.store.lock().unwrap();
+                store
+                    .get_validator(vote_pubkey)
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.identity)
+            };
             let body = json!({
-                "pubkey": &entry.pubkey,
+                "pubkey": vote_pubkey,
+                "identity": identity_input.map(|s| s.to_owned()).or(identity),
                 "blacklisted": true,
                 "name": &entry.name,
                 "first_seen": &entry.first_seen,
@@ -148,9 +173,19 @@ async fn get_pubkey(
             Ok(Json(body).into_response())
         }
         None => {
-            let in_db = state.store.lock().unwrap().validator_exists(&pubkey).unwrap_or(false);
+            let (in_db, identity) = {
+                let store = state.store.lock().unwrap();
+                let in_db = store.validator_exists(vote_pubkey).unwrap_or(false);
+                let identity = store
+                    .get_validator(vote_pubkey)
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.identity);
+                (in_db, identity)
+            };
             let body = json!({
-                "pubkey": pubkey,
+                "pubkey": vote_pubkey,
+                "identity": identity_input.map(|s| s.to_owned()).or(identity),
                 "blacklisted": false,
                 "sources": [],
                 "in_validators_db": in_db,

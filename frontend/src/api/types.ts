@@ -19,7 +19,8 @@ export interface BlacklistResponse {
 }
 
 export interface PubkeyLookupResult {
-  pubkey: string
+  pubkey: string        // resolved vote account pubkey
+  identity?: string     // validator identity pubkey (if known)
   blacklisted: boolean
   name?: string
   first_seen?: string
