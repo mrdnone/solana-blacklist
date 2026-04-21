@@ -1,11 +1,11 @@
 interface Props {
-  onSuggestSource?: () => void
+  onSources?: () => void
   onEpochs?: () => void
   onValidators?: () => void
   onMeridian?: () => void
 }
 
-export function Header({ onSuggestSource, onEpochs, onValidators, onMeridian }: Props) {
+export function Header({ onSources, onEpochs, onValidators, onMeridian }: Props) {
   return (
     <header className="hero-eclipse relative border-b border-white/[0.06] py-16 sm:py-20">
       <div className="relative z-10 max-w-[1200px] mx-auto px-6 sm:px-12 text-center">
@@ -52,15 +52,15 @@ export function Header({ onSuggestSource, onEpochs, onValidators, onMeridian }: 
               Vote to Blacklist
             </button>
           )}
-          {onSuggestSource && (
+          {onSources && (
             <button
-              onClick={onSuggestSource}
+              onClick={onSources}
               className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-accent-purple/20 bg-accent-purple/[0.06] rounded-full px-5 py-2 text-accent-purple/80 hover:text-accent-purple hover:border-accent-purple/40 hover:bg-accent-purple/10 transition-all duration-300"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
               </svg>
-              Suggest Source
+              Sources
             </button>
           )}
         </div>

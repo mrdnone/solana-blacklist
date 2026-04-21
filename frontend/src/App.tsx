@@ -7,6 +7,7 @@ import { ErrorBanner } from './components/ErrorBanner'
 import { Header } from './components/Header'
 import { PubkeyLookup } from './components/PubkeyLookup'
 import { SourceFilter } from './components/SourceFilter'
+import { SourcesPage } from './components/SourcesPage'
 import { Stars } from './components/Stars'
 import { StatsBar } from './components/StatsBar'
 import { MeridianVoting } from './components/MeridianVoting'
@@ -48,6 +49,7 @@ function filterEntries(
 
 type Page =
   | { kind: 'home' }
+  | { kind: 'sources' }
   | { kind: 'suggest-source' }
   | { kind: 'meridian' }
   | { kind: 'validator'; pubkey: string }
@@ -105,12 +107,17 @@ export default function App() {
   const navigateToMeridian = () => setPage({ kind: 'meridian' })
   const navigateToEpochs = () => setPage({ kind: 'epochs' })
   const navigateToEpochDetail = (epoch: number) => setPage({ kind: 'epoch-detail', epoch })
+  const navigateToSources = () => setPage({ kind: 'sources' })
+  const navigateToSuggestSource = () => setPage({ kind: 'suggest-source' })
   const navigateHome = () => setPage({ kind: 'home' })
 
   const renderPage = () => {
     switch (page.kind) {
       case 'suggest-source':
-        return <SuggestSource onBack={navigateHome} />
+        return <SuggestSource onBack={() => setPage({ kind: 'sources' })} />
+
+      case 'sources':
+        return <SourcesPage onBack={navigateHome} onSuggestSource={navigateToSuggestSource} />
 
       case 'meridian':
         return <MeridianVoting onBack={navigateHome} />
@@ -225,7 +232,7 @@ export default function App() {
 
       <div className="relative z-10">
         <Header
-          onSuggestSource={() => setPage({ kind: 'suggest-source' })}
+          onSources={navigateToSources}
           onEpochs={navigateToEpochs}
           onValidators={navigateToValidators}
           onMeridian={navigateToMeridian}

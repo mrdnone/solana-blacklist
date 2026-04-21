@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import { fetchSources } from '../api/endpoints'
+import type { SourcesResponse } from '../api/types'
 
 export function useSources() {
   const [sourceNames, setSourceNames] = useState<string[]>([])
+  const [data, setData] = useState<SourcesResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetchSources()
-      .then((data) => {
+      .then((d) => {
         if (!cancelled) {
-          setSourceNames(Object.keys(data).sort())
+          setData(d)
+          setSourceNames(Object.keys(d).sort())
           setIsLoading(false)
         }
       })
@@ -26,5 +29,5 @@ export function useSources() {
     }
   }, [])
 
-  return { sourceNames, isLoading, error }
+  return { sourceNames, data, isLoading, error }
 }
