@@ -25,8 +25,8 @@ export function BlacklistRow({ entry, onValidatorClick }: Props) {
       </td>
       <td className="px-5 py-3">
         <div className="flex flex-wrap gap-1.5">
-          {entry.sources.map((s) => (
-            <SourceBadge key={s.name} name={s.name} />
+          {entry.sources.map((s, i) => (
+            <SourceBadge key={`${s.name}-${i}`} name={s.name} />
           ))}
         </div>
       </td>

@@ -108,7 +108,13 @@ impl BlacklistCollector {
         let mut entries = map
             .into_iter()
             .map(|(k, v)| {
-                let sources_vec: Vec<BlacklistResultEntrySource> = v.into_iter().collect();
+                // Deduplicate by source name — keep only the first entry per name
+                // (the BTreeSet already sorts, so "first" is deterministic).
+                let mut seen_names = BTreeSet::new();
+                let sources_vec: Vec<BlacklistResultEntrySource> = v
+                    .into_iter()
+                    .filter(|s| seen_names.insert(s.name.clone()))
+                    .collect();
                 let name = sources_vec
                     .iter()
                     .filter_map(|s| s.validator_name.as_ref())
@@ -315,6 +321,51 @@ impl BlacklistCollector {
                     }
                     Err(err) => eprintln!("[epoch-snapshot] Failed to store snapshots: {err:#}"),
                 }
+            }
+        }
+
+        // Refresh blacklist columns for the current epoch on every run,
+        // so the live data is not stuck at insert-time (INSERT OR IGNORE).
+        if let (Some(store), Some(epoch_info)) = (&store, &epoch_info) {
+            let current_epoch = epoch_info.epoch;
+            // Build a set of blacklisted pubkeys for O(1) lookup
+            let bl_map: std::collections::HashMap<&str, &[BlacklistResultEntrySource]> = entries
+                .iter()
+                .map(|e| (e.pubkey.as_str(), e.sources.as_slice()))
+                .collect();
+            // Build update tuples for all validators we know about this epoch:
+            // RPC accounts (to clear/set their flag) + all blacklist entries (in
+            // case a blacklisted validator is no longer in the active RPC set).
+            let mut update_map: std::collections::HashMap<String, (bool, Option<String>)> =
+                current_accounts
+                    .iter()
+                    .chain(delinquent_accounts.iter())
+                    .map(|acc| (acc.vote_pubkey.clone(), (false, None)))
+                    .collect();
+            // Overwrite with blacklist data for any entry that is flagged
+            for (pubkey, sources) in &bl_map {
+                let refs: Vec<crate::persistence::BlacklistSourceRef> = sources
+                    .iter()
+                    .map(|s| crate::persistence::BlacklistSourceRef {
+                        name: s.name.clone(),
+                        reason: s.reason.clone(),
+                    })
+                    .collect();
+                let json = serde_json::to_string(&refs).ok();
+                update_map.insert(pubkey.to_string(), (true, json));
+            }
+            let update_entries: Vec<(String, bool, Option<String>)> = update_map
+                .into_iter()
+                .map(|(k, (bl, j))| (k, bl, j))
+                .collect();
+            match store.update_epoch_blacklist(current_epoch, &update_entries) {
+                Ok(_) => {
+                    let bl_count = update_entries.iter().filter(|(_, bl, _)| *bl).count();
+                    println!(
+                        "[epoch-snapshot] Updated blacklist for epoch {current_epoch}: {bl_count} blacklisted"
+                    );
+                }
+                Err(e) => eprintln!("[epoch-snapshot] Failed to update blacklist: {e:#}"),
             }
         }
 

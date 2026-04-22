@@ -22,8 +22,8 @@ function SourcesCell({ sources }: { sources?: BlacklistSourceRef[] }) {
   if (!sources || sources.length === 0) return <span className="text-text-muted">—</span>
   return (
     <div className="flex flex-col gap-1">
-      {sources.map((s) => (
-        <div key={s.name} className="flex flex-col gap-0.5">
+      {sources.map((s, i) => (
+        <div key={`${s.name}-${i}`} className="flex flex-col gap-0.5">
           <SourceBadge name={s.name} />
           {s.reason && (
             <span className="text-[0.72rem] text-text-muted leading-snug">{s.reason}</span>
@@ -45,7 +45,7 @@ function ValidatorRow({ v, onValidatorClick }: { v: ValidatorEpochSnapshot; onVa
       </td>
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <div onClick={() => onValidatorClick(v.vote_identity)} className="cursor-pointer hover:opacity-80 transition-opacity">
-          <PubkeyCell pubkey={v.vote_identity} />
+          <PubkeyCell pubkey={v.vote_identity} variant="red" />
         </div>
       </td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary font-mono">{formatLamports(v.activated_stake_lamports)}</td>

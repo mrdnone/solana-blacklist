@@ -373,6 +373,57 @@ impl FirstSeenStore {
         Ok(())
     }
 
+    /// Refresh only the blacklist columns for every row in `epoch`.
+    /// Called on every collector run (not just epoch boundaries), so the
+    /// current-epoch blacklist stays up-to-date without re-inserting the
+    /// full snapshot.
+    /// For blacklisted entries that have no snapshot row yet (e.g. a
+    /// Meridian-voted validator that dropped from the active RPC set), a
+    /// minimal stub row is inserted so they still appear on the epoch page.
+    pub fn update_epoch_blacklist(
+        &self,
+        epoch: u64,
+        entries: &[(String, bool, Option<String>)], // (vote_identity, is_blacklisted, sources_json)
+    ) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let now = chrono::Utc::now().to_rfc3339();
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            // UPDATE existing rows
+            let mut upd = tx.prepare(
+                "UPDATE validator_epochs
+                 SET is_blacklisted = ?1, blacklist_sources = ?2
+                 WHERE epoch = ?3 AND vote_identity = ?4",
+            )?;
+            // INSERT stub rows for blacklisted entries that have no snapshot yet
+            let mut ins = tx.prepare(
+                "INSERT OR IGNORE INTO validator_epochs
+                 (vote_identity, epoch, is_blacklisted, blacklist_sources, is_delinquent, snapshotted_at)
+                 VALUES (?1, ?2, 1, ?3, 0, ?4)",
+            )?;
+            for (pubkey, is_bl, sources_json) in entries {
+                upd.execute(rusqlite::params![
+                    *is_bl as i32,
+                    sources_json,
+                    epoch,
+                    pubkey,
+                ])?;
+                if *is_bl {
+                    ins.execute(rusqlite::params![
+                        pubkey,
+                        epoch,
+                        sources_json,
+                        now,
+                    ])?;
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn get_validator_epochs(&self, vote_identity: &str) -> Result<Vec<ValidatorEpochSnapshot>> {
         let mut stmt = self.conn.prepare(
             "SELECT vote_identity, epoch, node_pubkey, activated_stake_lamports,
@@ -479,6 +530,7 @@ impl FirstSeenStore {
                     AVG(commission) as avg_commission,
                     MIN(snapshotted_at) as snapshotted_at
              FROM validator_epochs
+             WHERE is_delinquent = 0
              GROUP BY epoch
              ORDER BY epoch DESC",
         )?;
