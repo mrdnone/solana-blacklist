@@ -22,7 +22,7 @@ COPY src/ ./src/
 # Embed the source JSON files the build script needs
 COPY src/sources/ ./src/sources/
 
-RUN cargo build --release --bin api
+RUN CARGO_BUILD_JOBS=1 cargo build --release --bin api
 
 # ── Stage 3: minimal runtime image ───────────────────────────────────────────
 FROM debian:bookworm-slim
