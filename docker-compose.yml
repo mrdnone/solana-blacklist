@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persistent DB and any runtime files
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      - BLACKLIST_DB_PATH=/data/blacklist.db
