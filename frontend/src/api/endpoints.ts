@@ -25,10 +25,11 @@ export const fetchValidatorDetail = (pubkey: string) =>
 
 export const fetchEpochs = () => apiFetch<EpochSummary[]>('/epochs')
 
-export const fetchEpochDetail = (epoch: number, q?: string, delinquent?: boolean, limit?: number, offset?: number) => {
+export const fetchEpochDetail = (epoch: number, q?: string, delinquent?: boolean, blacklistedOnly?: boolean, limit?: number, offset?: number) => {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (delinquent != null) params.set('delinquent', String(delinquent))
+  if (blacklistedOnly) params.set('blacklisted_only', 'true')
   if (limit != null) params.set('limit', String(limit))
   if (offset != null) params.set('offset', String(offset))
   const qs = params.toString()

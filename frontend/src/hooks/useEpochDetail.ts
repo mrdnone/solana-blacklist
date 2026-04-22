@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchEpochDetail } from '../api/endpoints'
 import type { EpochDetailResponse } from '../api/types'
 
-export function useEpochDetail(epoch: number | null, q: string = '', delinquent?: boolean, limit: number = 50, offset: number = 0) {
+export function useEpochDetail(
+  epoch: number | null,
+  q: string = '',
+  delinquent?: boolean,
+  blacklistedOnly?: boolean,
+  limit: number = 50,
+  offset: number = 0,
+) {
   const [data, setData] = useState<EpochDetailResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,11 +27,11 @@ export function useEpochDetail(epoch: number | null, q: string = '', delinquent?
     }
     setIsLoading(true)
     setError(null)
-    fetchEpochDetail(epoch, q || undefined, delinquent, limit, offset)
+    fetchEpochDetail(epoch, q || undefined, delinquent, blacklistedOnly, limit, offset)
       .then((d) => { if (isMounted.current) setData(d) })
       .catch((e) => { if (isMounted.current) setError(e.message ?? String(e)) })
       .finally(() => { if (isMounted.current) setIsLoading(false) })
-  }, [epoch, q, delinquent, limit, offset])
+  }, [epoch, q, delinquent, blacklistedOnly, limit, offset])
 
   return { data, isLoading, error }
 }

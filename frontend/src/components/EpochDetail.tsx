@@ -1,17 +1,9 @@
 import { useDeferredValue, useState } from 'react'
-import type { ValidatorEpochSnapshot } from '../api/types'
+import type { BlacklistSourceRef, ValidatorEpochSnapshot } from '../api/types'
 import { useEpochDetail } from '../hooks/useEpochDetail'
 import { PubkeyCell } from './PubkeyCell'
+import { SourceBadge } from './SourceBadge'
 import { Spinner } from './Spinner'
-import { StatusFilter } from './StatusFilter'
-
-type StatusValue = 'active' | 'delinquent' | 'all'
-
-function statusToDelinquent(s: StatusValue): boolean | undefined {
-  if (s === 'active') return false
-  if (s === 'delinquent') return true
-  return undefined
-}
 
 interface Props {
   epoch: number
@@ -26,36 +18,41 @@ function formatLamports(lamports?: number): string {
   return (lamports / 1_000_000_000).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' SOL'
 }
 
-function formatNumber(n?: number): string {
-  if (n == null) return '—'
-  return n.toLocaleString()
+function SourcesCell({ sources }: { sources?: BlacklistSourceRef[] }) {
+  if (!sources || sources.length === 0) return <span className="text-text-muted">—</span>
+  return (
+    <div className="flex flex-col gap-1">
+      {sources.map((s) => (
+        <div key={s.name} className="flex flex-col gap-0.5">
+          <SourceBadge name={s.name} />
+          {s.reason && (
+            <span className="text-[0.72rem] text-text-muted leading-snug">{s.reason}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function ValidatorRow({ v, onValidatorClick }: { v: ValidatorEpochSnapshot; onValidatorClick: (pubkey: string) => void }) {
   return (
     <tr
       onClick={() => onValidatorClick(v.vote_identity)}
-      className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer"
+      className="border-b border-white/[0.04] hover:bg-rose-500/[0.07] transition-all duration-300 cursor-pointer"
     >
       <td className="px-4 py-2.5 text-[0.82rem] text-text-primary truncate max-w-[160px]" title={v.name ?? undefined}>
         {v.name ?? <span className="text-text-muted">—</span>}
       </td>
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => onValidatorClick(v.vote_identity)} className="hover:opacity-80 transition-opacity">
+        <div onClick={() => onValidatorClick(v.vote_identity)} className="cursor-pointer hover:opacity-80 transition-opacity">
           <PubkeyCell pubkey={v.vote_identity} />
-        </button>
+        </div>
       </td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary font-mono">{formatLamports(v.activated_stake_lamports)}</td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary">{v.commission != null ? v.commission + '%' : '—'}</td>
-      <td className="px-4 py-2.5 text-[0.82rem]">
-        {v.is_delinquent
-          ? <span className="text-red-400">Yes</span>
-          : <span className="text-accent-green/70">No</span>
-        }
+      <td className="px-4 py-2.5">
+        <SourcesCell sources={v.blacklist_sources} />
       </td>
-      <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary font-mono">{formatNumber(v.epoch_credits)}</td>
-      <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary">{v.version ?? '—'}</td>
-      <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary">{v.ip_country ?? '—'}</td>
     </tr>
   )
 }
@@ -64,18 +61,15 @@ export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearch = useDeferredValue(searchQuery)
   const [offset, setOffset] = useState(0)
-  const [status, setStatus] = useState<StatusValue>('active')
 
-  // Reset offset when search or filter changes
+  // Reset offset when search changes
   const [prevSearch, setPrevSearch] = useState(deferredSearch)
-  const [prevStatus, setPrevStatus] = useState(status)
-  if (deferredSearch !== prevSearch || status !== prevStatus) {
+  if (deferredSearch !== prevSearch) {
     setPrevSearch(deferredSearch)
-    setPrevStatus(status)
     setOffset(0)
   }
 
-  const { data, isLoading, error } = useEpochDetail(epoch, deferredSearch, statusToDelinquent(status), PAGE_SIZE, offset)
+  const { data, isLoading, error } = useEpochDetail(epoch, deferredSearch, undefined, true, PAGE_SIZE, offset)
 
   const total = data?.total ?? 0
   const start = offset + 1
@@ -114,11 +108,11 @@ export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
           Epoch {epoch}
         </h2>
         <p className="mt-1 text-[0.82rem] text-text-muted font-mono">
-          {data.validator_count.toLocaleString()} validators snapshotted
+          {total.toLocaleString()} blacklisted validator{total !== 1 ? 's' : ''} at this epoch
         </p>
       </div>
 
-      {/* Search + Filter */}
+      {/* Search */}
       <div className="flex flex-wrap items-center gap-4">
         <input
           type="text"
@@ -127,16 +121,15 @@ export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
           placeholder="Search by name, vote pubkey, or node pubkey…"
           className="flex-1 min-w-[200px] max-w-md bg-card-bg border border-white/[0.06] rounded-lg px-4 py-2.5 text-[0.82rem] text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent-green/30 transition-colors"
         />
-        <StatusFilter value={status} onChange={setStatus} />
       </div>
 
-      {/* Validator table */}
+      {/* Blacklisted validator table */}
       <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10 bg-[#0d0d18]">
               <tr className="border-b border-white/[0.06]">
-                {['Name', 'Vote Pubkey', 'Stake', 'Comm.', 'Delinq.', 'Credits', 'Version', 'Country'].map((h) => (
+                {['Name', 'Vote Pubkey', 'Stake', 'Comm.', 'Blacklist Sources & Reason'].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-secondary">
                     {h}
                   </th>
@@ -146,8 +139,8 @@ export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
             <tbody>
               {data.validators.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center text-text-muted text-[0.85rem]">
-                    No validators match your search
+                  <td colSpan={5} className="px-5 py-16 text-center text-text-muted text-[0.85rem]">
+                    No blacklisted validators recorded for this epoch
                   </td>
                 </tr>
               ) : (
@@ -160,8 +153,8 @@ export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
         </div>
       </div>
 
-      {/* Pagination */}
-      {total > 0 && (
+      {/* Pagination — only shown when needed */}
+      {total > PAGE_SIZE && (
         <div className="flex items-center justify-between">
           <span className="text-[0.78rem] text-text-muted font-mono">
             Showing {start}–{end} of {total.toLocaleString()}

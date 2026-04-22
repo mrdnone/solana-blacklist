@@ -84,6 +84,13 @@ export interface ValidatorEpochSnapshot {
   image?: string
   website?: string
   snapshotted_at: string
+  is_blacklisted: boolean
+  blacklist_sources?: BlacklistSourceRef[]
+}
+
+export interface BlacklistSourceRef {
+  name: string
+  reason?: string
 }
 
 export interface ValidatorDetailResponse {

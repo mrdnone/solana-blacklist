@@ -35,9 +35,9 @@ function ValidatorRow({ v, onValidatorClick }: { v: ValidatorMeta; onValidatorCl
         {v.name ?? <span className="text-text-muted">—</span>}
       </td>
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-        <button onClick={() => onValidatorClick(v.vote_identity)} className="hover:opacity-80 transition-opacity">
+        <div onClick={() => onValidatorClick(v.vote_identity)} className="cursor-pointer hover:opacity-80 transition-opacity">
           <PubkeyCell pubkey={v.vote_identity} />
-        </button>
+        </div>
       </td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary font-mono">{formatLamports(v.activated_stake_lamports)}</td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary">{v.commission != null ? v.commission + '%' : '—'}</td>

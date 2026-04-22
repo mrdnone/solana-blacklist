@@ -38,6 +38,13 @@ pub struct ValidatorMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlacklistSourceRef {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidatorEpochSnapshot {
     pub vote_identity: String,
     pub epoch: u64,
@@ -62,6 +69,9 @@ pub struct ValidatorEpochSnapshot {
     pub website: Option<String>,
     // Housekeeping
     pub snapshotted_at: String,
+    // Blacklist
+    pub is_blacklisted: bool,
+    pub blacklist_sources: Option<Vec<BlacklistSourceRef>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -233,6 +243,19 @@ impl FirstSeenStore {
         )
         .context("failed to create meridian admin tables")?;
 
+        // Add blacklist columns to validator_epochs (idempotent)
+        for col_def in &[
+            "is_blacklisted INTEGER NOT NULL DEFAULT 0",
+            "blacklist_sources TEXT",
+        ] {
+            let sql = format!("ALTER TABLE validator_epochs ADD COLUMN {col_def}");
+            if let Err(e) = conn.execute_batch(&sql) {
+                if !e.to_string().contains("duplicate column") {
+                    return Err(e).context(format!("failed to add column: {col_def}"));
+                }
+            }
+        }
+
         Ok(Self { conn })
     }
 
@@ -262,6 +285,44 @@ impl FirstSeenStore {
 
     // ── Epoch snapshot persistence ───────────────────────────────────────────
 
+    /// Map a single SQLite row (22 columns) to a `ValidatorEpochSnapshot`.
+    /// Column order: vote_identity(0), epoch(1), node_pubkey(2),
+    ///   activated_stake_lamports(3), commission(4), is_delinquent(5),
+    ///   epoch_credits(6), prev_epoch_credits(7), last_vote(8), root_slot(9),
+    ///   name(10), skip_rate(11), uptime(12), version(13), wiz_score(14),
+    ///   apy_estimate(15), ip_country(16), image(17), website(18),
+    ///   snapshotted_at(19), is_blacklisted(20), blacklist_sources TEXT(21).
+    fn map_epoch_snapshot_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ValidatorEpochSnapshot> {
+        let blacklist_sources_json: Option<String> = row.get(21)?;
+        let blacklist_sources = blacklist_sources_json.and_then(|s| {
+            serde_json::from_str::<Vec<BlacklistSourceRef>>(&s).ok()
+        });
+        Ok(ValidatorEpochSnapshot {
+            vote_identity: row.get(0)?,
+            epoch: row.get(1)?,
+            node_pubkey: row.get(2)?,
+            activated_stake_lamports: row.get(3)?,
+            commission: row.get(4)?,
+            is_delinquent: row.get::<_, i32>(5)? != 0,
+            epoch_credits: row.get(6)?,
+            prev_epoch_credits: row.get(7)?,
+            last_vote: row.get(8)?,
+            root_slot: row.get(9)?,
+            name: row.get(10)?,
+            skip_rate: row.get(11)?,
+            uptime: row.get(12)?,
+            version: row.get(13)?,
+            wiz_score: row.get(14)?,
+            apy_estimate: row.get(15)?,
+            ip_country: row.get(16)?,
+            image: row.get(17)?,
+            website: row.get(18)?,
+            snapshotted_at: row.get(19)?,
+            is_blacklisted: row.get::<_, i32>(20)? != 0,
+            blacklist_sources,
+        })
+    }
+
     pub fn insert_epoch_snapshots(&self, snapshots: &[ValidatorEpochSnapshot]) -> Result<()> {
         if snapshots.is_empty() {
             return Ok(());
@@ -273,10 +334,15 @@ impl FirstSeenStore {
                     vote_identity, epoch, node_pubkey, activated_stake_lamports,
                     commission, is_delinquent, epoch_credits, prev_epoch_credits,
                     last_vote, root_slot, name, skip_rate, uptime, version,
-                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at,
+                    is_blacklisted, blacklist_sources
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             )?;
             for s in snapshots {
+                let blacklist_sources_json: Option<String> = s
+                    .blacklist_sources
+                    .as_ref()
+                    .and_then(|v| serde_json::to_string(v).ok());
                 stmt.execute(rusqlite::params![
                     s.vote_identity,
                     s.epoch,
@@ -298,6 +364,8 @@ impl FirstSeenStore {
                     s.image,
                     s.website,
                     s.snapshotted_at,
+                    s.is_blacklisted as i32,
+                    blacklist_sources_json,
                 ])?;
             }
         }
@@ -310,33 +378,11 @@ impl FirstSeenStore {
             "SELECT vote_identity, epoch, node_pubkey, activated_stake_lamports,
                     commission, is_delinquent, epoch_credits, prev_epoch_credits,
                     last_vote, root_slot, name, skip_rate, uptime, version,
-                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at
+                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at,
+                    is_blacklisted, blacklist_sources
              FROM validator_epochs WHERE vote_identity = ?1 ORDER BY epoch DESC",
         )?;
-        let rows = stmt.query_map(rusqlite::params![vote_identity], |row| {
-            Ok(ValidatorEpochSnapshot {
-                vote_identity: row.get(0)?,
-                epoch: row.get(1)?,
-                node_pubkey: row.get(2)?,
-                activated_stake_lamports: row.get(3)?,
-                commission: row.get(4)?,
-                is_delinquent: row.get::<_, i32>(5)? != 0,
-                epoch_credits: row.get(6)?,
-                prev_epoch_credits: row.get(7)?,
-                last_vote: row.get(8)?,
-                root_slot: row.get(9)?,
-                name: row.get(10)?,
-                skip_rate: row.get(11)?,
-                uptime: row.get(12)?,
-                version: row.get(13)?,
-                wiz_score: row.get(14)?,
-                apy_estimate: row.get(15)?,
-                ip_country: row.get(16)?,
-                image: row.get(17)?,
-                website: row.get(18)?,
-                snapshotted_at: row.get(19)?,
-            })
-        })?;
+        let rows = stmt.query_map(rusqlite::params![vote_identity], Self::map_epoch_snapshot_row)?;
         let mut result = Vec::new();
         for row in rows {
             result.push(row?);
@@ -349,6 +395,7 @@ impl FirstSeenStore {
         epoch: u64,
         query: Option<&str>,
         delinquent: Option<bool>,
+        blacklisted_only: bool,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<ValidatorEpochSnapshot>> {
@@ -365,15 +412,20 @@ impl FirstSeenStore {
         if let Some(d) = delinquent {
             extra_where.push_str(&format!(" AND is_delinquent = ?{idx}"));
             params.push(Box::new(d as i32));
-            #[allow(unused_assignments)]
-            { idx += 1; }
+            idx += 1;
         }
+        if blacklisted_only {
+            extra_where.push_str(" AND is_blacklisted = 1");
+        }
+        #[allow(unused_assignments)]
+        { let _ = idx; }
 
         let sql = format!(
             "SELECT vote_identity, epoch, node_pubkey, activated_stake_lamports,
                     commission, is_delinquent, epoch_credits, prev_epoch_credits,
                     last_vote, root_slot, name, skip_rate, uptime, version,
-                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at
+                    wiz_score, apy_estimate, ip_country, image, website, snapshotted_at,
+                    is_blacklisted, blacklist_sources
              FROM validator_epochs WHERE epoch = ?1{} ORDER BY activated_stake_lamports DESC NULLS LAST, vote_identity ASC
              LIMIT {} OFFSET {}",
             extra_where, limit, offset
@@ -382,30 +434,7 @@ impl FirstSeenStore {
         let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(epoch)];
         all_params.extend(params);
         let param_refs: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(param_refs.as_slice(), |row| {
-            Ok(ValidatorEpochSnapshot {
-                vote_identity: row.get(0)?,
-                epoch: row.get(1)?,
-                node_pubkey: row.get(2)?,
-                activated_stake_lamports: row.get(3)?,
-                commission: row.get(4)?,
-                is_delinquent: row.get::<_, i32>(5)? != 0,
-                epoch_credits: row.get(6)?,
-                prev_epoch_credits: row.get(7)?,
-                last_vote: row.get(8)?,
-                root_slot: row.get(9)?,
-                name: row.get(10)?,
-                skip_rate: row.get(11)?,
-                uptime: row.get(12)?,
-                version: row.get(13)?,
-                wiz_score: row.get(14)?,
-                apy_estimate: row.get(15)?,
-                ip_country: row.get(16)?,
-                image: row.get(17)?,
-                website: row.get(18)?,
-                snapshotted_at: row.get(19)?,
-            })
-        })?;
+        let rows = stmt.query_map(param_refs.as_slice(), Self::map_epoch_snapshot_row)?;
         let mut result = Vec::new();
         for row in rows {
             result.push(row?);
@@ -413,7 +442,7 @@ impl FirstSeenStore {
         Ok(result)
     }
 
-    pub fn count_epoch_snapshots(&self, epoch: u64, query: Option<&str>, delinquent: Option<bool>) -> Result<u64> {
+    pub fn count_epoch_snapshots(&self, epoch: u64, query: Option<&str>, delinquent: Option<bool>, blacklisted_only: bool) -> Result<u64> {
         let mut extra_where = String::new();
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         let mut idx = 2u32;
@@ -427,9 +456,13 @@ impl FirstSeenStore {
         if let Some(d) = delinquent {
             extra_where.push_str(&format!(" AND is_delinquent = ?{idx}"));
             params.push(Box::new(d as i32));
-            #[allow(unused_assignments)]
-            { idx += 1; }
+            idx += 1;
         }
+        if blacklisted_only {
+            extra_where.push_str(" AND is_blacklisted = 1");
+        }
+        #[allow(unused_assignments)]
+        { let _ = idx; }
 
         let sql = format!("SELECT COUNT(*) FROM validator_epochs WHERE epoch = ?1{}", extra_where);
         let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(epoch)];
@@ -962,6 +995,8 @@ mod tests {
             image: None,
             website: None,
             snapshotted_at: "2026-04-15T00:00:00Z".to_string(),
+            is_blacklisted: false,
+            blacklist_sources: None,
         }
     }
 
@@ -1182,7 +1217,7 @@ mod tests {
         ];
         store.insert_epoch_snapshots(&snapshots).unwrap();
 
-        let results = store.get_epoch_snapshots(750, None, None, 500, 0).unwrap();
+        let results = store.get_epoch_snapshots(750, None, None, false, 500, 0).unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].vote_identity, "AAA111");
         assert_eq!(results[0].epoch_credits, Some(432000));
@@ -1200,7 +1235,7 @@ mod tests {
         store.insert_epoch_snapshots(&snapshots).unwrap();
         store.insert_epoch_snapshots(&snapshots).unwrap();
 
-        let results = store.get_epoch_snapshots(750, None, None, 500, 0).unwrap();
+        let results = store.get_epoch_snapshots(750, None, None, false, 500, 0).unwrap();
         assert_eq!(results.len(), 1);
 
         let _ = std::fs::remove_file(&path);

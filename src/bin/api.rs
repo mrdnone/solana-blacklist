@@ -386,6 +386,7 @@ async fn list_epochs(State(state): State<AppState>) -> ApiResult<Response> {
 struct EpochDetailQuery {
     q: Option<String>,
     delinquent: Option<bool>,
+    blacklisted_only: Option<bool>,
     limit: Option<u32>,
     offset: Option<u32>,
 }
@@ -398,16 +399,17 @@ async fn get_epoch_detail(
     let limit = params.limit.unwrap_or(50).min(500);
     let offset = params.offset.unwrap_or(0);
     let q = params.q.as_deref();
+    let blacklisted_only = params.blacklisted_only.unwrap_or(false);
 
     let store = state.store.lock().unwrap();
-    let total = store.count_epoch_snapshots(epoch, q, params.delinquent)?;
+    let total = store.count_epoch_snapshots(epoch, q, params.delinquent, blacklisted_only)?;
 
-    if total == 0 && offset == 0 && q.is_none() && params.delinquent.is_none() {
+    if total == 0 && offset == 0 && q.is_none() && params.delinquent.is_none() && !blacklisted_only {
         let body = json!({ "error": format!("no data for epoch {}", epoch) });
         return Ok((StatusCode::NOT_FOUND, Json(body)).into_response());
     }
 
-    let validators = store.get_epoch_snapshots(epoch, q, params.delinquent, limit, offset)?;
+    let validators = store.get_epoch_snapshots(epoch, q, params.delinquent, blacklisted_only, limit, offset)?;
 
     let body = json!({
         "epoch": epoch,
@@ -807,7 +809,7 @@ async fn main() {
     // index.html for any path that doesn't match a real file, so React Router
     // can handle client-side routing on hard refresh or direct links.
     let app = Router::new()
-        .nest("/", api_router)
+        .nest("/api", api_router)
         .nest_service(
             "/blacklist",
             ServeDir::new("frontend/dist")

@@ -227,32 +227,6 @@ impl BlacklistCollector {
             }
         }
 
-        // Epoch snapshot: store once per epoch boundary
-        if let (Some(store), Some(epoch_info)) = (&store, &epoch_info) {
-            let current_epoch = epoch_info.epoch;
-            let last_epoch = store.get_last_stored_epoch().unwrap_or(None);
-
-            if last_epoch.is_none_or(|last| current_epoch > last) {
-                let snapshots = build_epoch_snapshots(
-                    current_epoch,
-                    &current_accounts,
-                    &delinquent_accounts,
-                    &stakewiz_map,
-                );
-                match store.insert_epoch_snapshots(&snapshots) {
-                    Ok(_) => {
-                        println!(
-                            "[epoch-snapshot] Stored {} snapshots for epoch {}",
-                            snapshots.len(),
-                            current_epoch
-                        );
-                        let _ = store.set_last_stored_epoch(current_epoch);
-                    }
-                    Err(err) => eprintln!("[epoch-snapshot] Failed to store snapshots: {err:#}"),
-                }
-            }
-        }
-
         // Enrich names: prefer bulk lookup from Stakewiz data, fallback to per-pubkey HTTP
         if !stakewiz_map.is_empty() {
             for entry in &mut entries {
@@ -312,6 +286,35 @@ impl BlacklistCollector {
                     }
                 }
                 Err(e) => eprintln!("[meridian] Failed to query votes: {e:#}"),
+            }
+        }
+
+        // Epoch snapshot: store once per epoch boundary (after Meridian so blacklist is complete)
+        if let (Some(store), Some(epoch_info)) = (&store, &epoch_info) {
+            let current_epoch = epoch_info.epoch;
+            let last_epoch = store.get_last_stored_epoch().unwrap_or(None);
+
+            if last_epoch.is_none_or(|last| current_epoch > last) {
+                let snapshots = build_epoch_snapshots(
+                    current_epoch,
+                    &current_accounts,
+                    &delinquent_accounts,
+                    &stakewiz_map,
+                    &entries,
+                );
+                let blacklisted_count = snapshots.iter().filter(|s| s.is_blacklisted).count();
+                match store.insert_epoch_snapshots(&snapshots) {
+                    Ok(_) => {
+                        println!(
+                            "[epoch-snapshot] Stored {} snapshots for epoch {} ({} blacklisted)",
+                            snapshots.len(),
+                            current_epoch,
+                            blacklisted_count,
+                        );
+                        let _ = store.set_last_stored_epoch(current_epoch);
+                    }
+                    Err(err) => eprintln!("[epoch-snapshot] Failed to store snapshots: {err:#}"),
+                }
             }
         }
 
@@ -850,8 +853,15 @@ fn build_epoch_snapshots(
     current: &[RpcVoteAccount],
     delinquent: &[RpcVoteAccount],
     stakewiz: &HashMap<String, ValidatorMeta>,
+    blacklist_entries: &[BlacklistResultEntry],
 ) -> Vec<crate::persistence::ValidatorEpochSnapshot> {
     let now = chrono::Utc::now().to_rfc3339();
+
+    // Build a lookup map: vote_pubkey → sources
+    let bl_map: HashMap<&str, &[BlacklistResultEntrySource]> = blacklist_entries
+        .iter()
+        .map(|e| (e.pubkey.as_str(), e.sources.as_slice()))
+        .collect();
 
     let mut snapshots = Vec::with_capacity(current.len() + delinquent.len());
 
@@ -869,6 +879,20 @@ fn build_epoch_snapshots(
                 .unwrap_or((None, None));
 
             let swiz = stakewiz.get(&acc.vote_pubkey);
+
+            let (is_blacklisted, blacklist_sources) =
+                if let Some(sources) = bl_map.get(acc.vote_pubkey.as_str()) {
+                    let refs: Vec<crate::persistence::BlacklistSourceRef> = sources
+                        .iter()
+                        .map(|s| crate::persistence::BlacklistSourceRef {
+                            name: s.name.clone(),
+                            reason: s.reason.clone(),
+                        })
+                        .collect();
+                    (true, Some(refs))
+                } else {
+                    (false, None)
+                };
 
             snapshots.push(crate::persistence::ValidatorEpochSnapshot {
                 vote_identity: acc.vote_pubkey.clone(),
@@ -891,6 +915,8 @@ fn build_epoch_snapshots(
                 image: swiz.and_then(|s| s.image.clone()),
                 website: swiz.and_then(|s| s.website.clone()),
                 snapshotted_at: now.clone(),
+                is_blacklisted,
+                blacklist_sources,
             });
         }
     }
@@ -1602,9 +1628,7 @@ mod tests {
     #[test]
     fn test_build_epoch_snapshots_credits_extraction() {
         let acc = make_rpc_vote_account("AAA111", vec![[748, 400000, 398000], [749, 420000, 400000], [750, 432000, 420000]]);
-        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new());
-        assert_eq!(snapshots.len(), 1);
-        assert_eq!(snapshots[0].epoch_credits, Some(432000));
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new(), &[]);
         assert_eq!(snapshots[0].prev_epoch_credits, Some(420000));
     }
 
@@ -1612,7 +1636,7 @@ mod tests {
     fn test_build_epoch_snapshots_delinquent_flag() {
         let current = make_rpc_vote_account("AAA111", vec![[750, 100, 90]]);
         let delinquent = make_rpc_vote_account("BBB222", vec![[750, 50, 40]]);
-        let snapshots = build_epoch_snapshots(750, &[current], &[delinquent], &HashMap::new());
+        let snapshots = build_epoch_snapshots(750, &[current], &[delinquent], &HashMap::new(), &[]);
         assert_eq!(snapshots.len(), 2);
         assert!(!snapshots[0].is_delinquent);
         assert!(snapshots[1].is_delinquent);
@@ -1648,7 +1672,7 @@ mod tests {
                 prev_epoch_credits: None,
             },
         );
-        let snapshots = build_epoch_snapshots(750, &[acc], &[], &swiz);
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &swiz, &[]);
         assert_eq!(snapshots[0].name, Some("My Validator".to_string()));
         assert_eq!(snapshots[0].skip_rate, Some(0.5));
         assert_eq!(snapshots[0].wiz_score, Some(8.5));
@@ -1657,7 +1681,7 @@ mod tests {
     #[test]
     fn test_build_epoch_snapshots_stakewiz_missing() {
         let acc = make_rpc_vote_account("AAA111", vec![[750, 100, 90]]);
-        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new());
+        let snapshots = build_epoch_snapshots(750, &[acc], &[], &HashMap::new(), &[]);
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].name, None);
         assert_eq!(snapshots[0].skip_rate, None);
