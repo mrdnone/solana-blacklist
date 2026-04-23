@@ -1,45 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Solana Blacklist — VPS deployment script
-# Run from the repo root on your local machine.
+# Solana Blacklist — initial VPS setup script.
+# Run from the repo root on your LOCAL machine.
 #
 # Usage:
 #   ./deploy/deploy.sh user@your-vps-ip
 #
 # Prerequisites on the VPS:
-#   - nginx installed
-#   - Rust toolchain installed (for building), OR build locally and scp the binary
+#   - Docker + Docker Compose plugin installed
+#   - nginx installed (for TLS termination)
+#   - Certbot configured for solana.mrdn.one
 
 HOST="${1:?Usage: deploy.sh user@host}"
-REMOTE_DIR="/var/www/solana-blacklist"
+REMOTE_DIR="/opt/solana-blacklist"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-echo "==> Building frontend..."
-cd frontend
-npm ci
-npm run build
-cd ..
+cd "$REPO_ROOT"
 
-echo "==> Building Rust API (release)..."
-cargo build --release --bin api
+echo "==> Uploading repository to ${HOST}:${REMOTE_DIR}..."
+ssh "$HOST" "mkdir -p ${REMOTE_DIR}"
 
-echo "==> Uploading to ${HOST}..."
-ssh "$HOST" "mkdir -p ${REMOTE_DIR}/frontend"
+rsync -avz --delete \
+    --exclude='.git/' \
+    --exclude='target/' \
+    --exclude='frontend/node_modules/' \
+    --exclude='data/' \
+    --exclude='.env' \
+    ./ "${HOST}:${REMOTE_DIR}/"
 
-# Upload the API binary
-scp target/release/api "${HOST}:${REMOTE_DIR}/api"
-
-# Upload frontend dist
-rsync -avz --delete frontend/dist/ "${HOST}:${REMOTE_DIR}/frontend/dist/"
-
-# Upload nginx config
+echo "==> Uploading nginx config..."
 scp deploy/nginx.conf "${HOST}:/etc/nginx/sites-available/solana-blacklist"
-ssh "$HOST" "ln -sf /etc/nginx/sites-available/solana-blacklist /etc/nginx/sites-enabled/"
+ssh "$HOST" "ln -sf /etc/nginx/sites-available/solana-blacklist /etc/nginx/sites-enabled/solana-blacklist"
 
-# Upload systemd service
-scp deploy/solana-blacklist-api.service "${HOST}:/etc/systemd/system/"
+echo "==> Uploading systemd unit..."
+scp deploy/solana-blacklist-api.service "${HOST}:/etc/systemd/system/solana-blacklist-api.service"
 
-echo "==> Restarting services..."
-ssh "$HOST" "systemctl daemon-reload && systemctl enable --now solana-blacklist-api && nginx -t && systemctl reload nginx"
+echo "==> Building and starting service on ${HOST}..."
+ssh "$HOST" "
+    cd ${REMOTE_DIR}
+    # Create .env from example if it doesn't already exist
+    [ -f .env ] || cp .env.example .env
+    # Create data directory for the SQLite volume
+    mkdir -p data
+    systemctl daemon-reload
+    systemctl enable solana-blacklist-api
+    systemctl restart solana-blacklist-api
+    nginx -t && systemctl reload nginx
+    docker compose ps
+"
 
-echo "==> Done! Site is live at http://\$(echo $HOST | cut -d@ -f2)"
+echo "==> Done! Site is live at https://$(echo "$HOST" | cut -d@ -f2)/blacklist/"

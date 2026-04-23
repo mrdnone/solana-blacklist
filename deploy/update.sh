@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
-# Run this ON THE SERVER to pull latest code and restart.
-# Usage: ./deploy/update.sh
 set -euo pipefail
 
-cd /var/www/solana-blacklist
+# Run this ON THE SERVER to rebuild and restart the currently deployed tree.
+# If this directory is a git checkout, the script will also pull the latest code.
+# Usage: ./deploy/update.sh
 
-echo "==> Pulling latest code..."
-git pull
+REMOTE_DIR="/opt/solana-blacklist"
 
-echo "==> Stopping old service (if any)..."
-systemctl stop solana-blacklist-api 2>/dev/null || true
-systemctl disable solana-blacklist-api 2>/dev/null || true
+cd "$REMOTE_DIR"
+
+if [[ -d .git ]]; then
+	echo "==> Pulling latest code..."
+	git pull --ff-only
+else
+	echo "==> No git checkout found; skipping git pull."
+	echo "==> Re-run deploy/deploy.sh from your local checkout to sync code changes."
+fi
 
 echo "==> Rebuilding and restarting container..."
-docker compose down
-docker compose build --no-cache
-docker compose up -d
+# --build triggers a rebuild only if Dockerfile or build context changed.
+# Docker layer cache is preserved — no --no-cache.
+docker compose up -d --build --remove-orphans
 
-echo "==> Done. Container status:"
+echo "==> Waiting for healthcheck..."
+sleep 5
 docker compose ps
+
+echo "==> Done."

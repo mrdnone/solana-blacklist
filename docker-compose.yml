@@ -3,11 +3,20 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
-      # Persistent DB and any runtime files
+      # Persistent SQLite database
       - ./data:/data
     env_file:
       - .env
     environment:
       - BLACKLIST_DB_PATH=/data/blacklist.db
+      - BLACKLIST_REFRESH_SECS=300
+      # Set ADMIN_KEY and SOLANA_RPC_URL in .env (see .env.example).
+      # Run: cp .env.example .env  — before first docker compose up.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/sources"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3

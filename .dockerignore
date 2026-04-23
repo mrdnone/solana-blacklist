@@ -1,8 +1,36 @@
+# Rust build artifacts
 target/
+
+# Node modules (both root and frontend)
 node_modules/
 frontend/node_modules/
-blacklist.db
-blacklist.db-shm
-blacklist.db-wal
+
+# Frontend dev env — only .env.production is used inside Docker
+frontend/.env
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime data volume
 data/
+
+# Local tooling state
+.claude/
+
+# Secrets — never bake into the image
 .env
+
+# Git history and IDE files
+.git/
+.gitignore
+.github/
+.idea/
+*.iml
+
+# Deploy scripts — not needed inside the image
+deploy/
+
+# Docs and misc
+*.md
