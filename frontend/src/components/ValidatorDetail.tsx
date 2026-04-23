@@ -333,17 +333,6 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
           </span>
         </div>
         <EpochCalendar epochs={data.epochs} onEpochClick={onEpochClick} />
-        {/* Legend */}
-        <div className="px-5 pb-4 flex items-center gap-5">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded border border-rose-500/40 bg-rose-500/[0.12]" />
-            <span className="text-[0.65rem] text-text-muted font-mono">Blacklisted</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded border border-accent-green/20 bg-accent-green/[0.05]" />
-            <span className="text-[0.65rem] text-text-muted font-mono">Clean</span>
-          </div>
-        </div>
       </div>
     </div>
   )
