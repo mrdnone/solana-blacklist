@@ -740,12 +740,34 @@ fn best_json(s: &str) -> Json {
     Json::String(t.to_string())
 }
 
+/// Expand `${VAR_NAME}` placeholders in a header value using environment variables.
+/// Returns an error if a referenced variable is not set.
+fn expand_env_vars(value: &str) -> Result<String> {
+    let mut result = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(start) = rest.find("${") {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        let end = after
+            .find('}')
+            .ok_or_else(|| anyhow!("unclosed '${{' in header value: {}", value))?;
+        let var_name = &after[..end];
+        let var_value = std::env::var(var_name)
+            .with_context(|| format!("environment variable '{}' is not set (required by source header)", var_name))?;
+        result.push_str(&var_value);
+        rest = &after[end + 1..];
+    }
+    result.push_str(rest);
+    Ok(result)
+}
+
 async fn fetch(client: &Client, s: &BlacklistSource) -> Result<String> {
     let mut request = client.get(s.url.to_owned());
 
     if let Some(headers) = s.fetch_headers.as_ref() {
         for (k, v) in headers {
-            request = request.header(k, v);
+            let expanded = expand_env_vars(v)?;
+            request = request.header(k, expanded);
         }
     }
 
