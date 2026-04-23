@@ -7,11 +7,11 @@ export function Header() {
         <NavLink to="/" end className="inline-block">
           <h1 className="font-heading text-[2.6rem] sm:text-[3.2rem] font-semibold tracking-[8px] sm:tracking-[12px] uppercase bg-gradient-to-r from-accent-green to-accent-purple bg-clip-text text-transparent leading-tight"
               style={{ textShadow: '0 0 80px rgba(20, 241, 149, 0.3)' }}>
-            Blacklist
+            Blacklist Explorer
           </h1>
         </NavLink>
         <p className="mt-3 text-[0.78rem] tracking-[4px] uppercase text-text-muted font-body">
-          Aggregated Solana Validator Data
+          Solana Validator Trust Layer
         </p>
         <div className="mt-5 mx-auto w-[60px] h-px bg-gradient-to-r from-transparent via-accent-green/30 to-transparent" />
 
