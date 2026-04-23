@@ -22,7 +22,7 @@ export function ValidatorDetailPage() {
         isLoading={isLoading}
         error={error}
         onBack={() => navigate(-1)}
-        onEpochClick={(epoch) => navigate(`/epochs/${epoch}`)}
+        onEpochClick={(epoch) => navigate(`/epochs/${epoch}?search=${pubkey}`)}
         onVote={(voteIdentity) => navigate(`/vote/${voteIdentity}`)}
       />
     </main>

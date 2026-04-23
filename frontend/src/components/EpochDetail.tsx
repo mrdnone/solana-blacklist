@@ -7,6 +7,7 @@ import { Spinner } from './Spinner'
 
 interface Props {
   epoch: number
+  initialSearch?: string
   onBack: () => void
   onValidatorClick: (pubkey: string) => void
 }
@@ -57,8 +58,8 @@ function ValidatorRow({ v, onValidatorClick }: { v: ValidatorEpochSnapshot; onVa
   )
 }
 
-export function EpochDetail({ epoch, onBack, onValidatorClick }: Props) {
-  const [searchQuery, setSearchQuery] = useState('')
+export function EpochDetail({ epoch, initialSearch = '', onBack, onValidatorClick }: Props) {
+  const [searchQuery, setSearchQuery] = useState(initialSearch)
   const deferredSearch = useDeferredValue(searchQuery)
   const [offset, setOffset] = useState(0)
 
