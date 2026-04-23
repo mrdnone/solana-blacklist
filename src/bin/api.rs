@@ -62,13 +62,21 @@ struct VoteSubmitSchema {
         description = "Aggregated Solana validator blacklist with community blacklist reporting (Meridian).",
         version = "1.0.0"
     ),
+    servers(
+        (url = "/api", description = "API base path")
+    ),
     paths(
         api_list_sources,
         api_get_blacklist,
         api_get_pubkey,
+        list_validators,
+        get_validator_detail,
+        list_epochs,
+        get_epoch_detail,
         api_votes_list,
         api_vote_submit,
         api_vote_detail,
+        meridian_info,
         api_admin_list_votes,
         api_admin_votes_by_validator,
         api_admin_approve,
@@ -325,6 +333,18 @@ struct ValidatorsQuery {
     offset: Option<u32>,
 }
 
+#[utoipa::path(
+    get, path = "/validators",
+    tag = "Blacklist",
+    params(
+        ("q" = Option<String>, Query, description = "Search by name, vote pubkey or node pubkey"),
+        ("delinquent" = Option<bool>, Query, description = "Filter by delinquent status"),
+        ("exclude_zero_stake" = Option<bool>, Query, description = "Exclude validators with zero stake"),
+        ("limit" = Option<u32>, Query, description = "Max results (default 50, max 500)"),
+        ("offset" = Option<u32>, Query, description = "Pagination offset"),
+    ),
+    responses((status = 200, description = "Paginated validator list"))
+)]
 async fn list_validators(
     State(state): State<AppState>,
     Query(params): Query<ValidatorsQuery>,
@@ -348,6 +368,16 @@ async fn list_validators(
 
 // ── Validator detail endpoint ────────────────────────────────────────────────
 
+#[utoipa::path(
+    get, path = "/validators/{pubkey}",
+    tag = "Blacklist",
+    params(("pubkey" = String, Path, description = "Validator vote account pubkey")),
+    responses(
+        (status = 200, description = "Validator detail with epoch history"),
+        (status = 400, description = "Invalid pubkey"),
+        (status = 404, description = "Validator not found"),
+    )
+)]
 async fn get_validator_detail(
     State(state): State<AppState>,
     Path(pubkey): Path<String>,
@@ -376,6 +406,11 @@ async fn get_validator_detail(
 
 // ── Epoch endpoints ──────────────────────────────────────────────────────────
 
+#[utoipa::path(
+    get, path = "/epochs",
+    tag = "Blacklist",
+    responses((status = 200, description = "List of epochs that have snapshot data"))
+)]
 async fn list_epochs(State(state): State<AppState>) -> ApiResult<Response> {
     let store = state.store.lock().unwrap();
     let epochs = store.list_stored_epochs()?;
@@ -391,6 +426,22 @@ struct EpochDetailQuery {
     offset: Option<u32>,
 }
 
+#[utoipa::path(
+    get, path = "/epochs/{epoch}",
+    tag = "Blacklist",
+    params(
+        ("epoch" = u64, Path, description = "Epoch number"),
+        ("q" = Option<String>, Query, description = "Search by name, vote pubkey or node pubkey"),
+        ("blacklisted_only" = Option<bool>, Query, description = "Return only blacklisted validators"),
+        ("delinquent" = Option<bool>, Query, description = "Filter by delinquent status"),
+        ("limit" = Option<u32>, Query, description = "Max results (default 50, max 500)"),
+        ("offset" = Option<u32>, Query, description = "Pagination offset"),
+    ),
+    responses(
+        (status = 200, description = "Paginated validator snapshots for the epoch"),
+        (status = 404, description = "No data for this epoch"),
+    )
+)]
 async fn get_epoch_detail(
     State(state): State<AppState>,
     Path(epoch): Path<u64>,
@@ -550,6 +601,11 @@ async fn api_vote_detail(
 }
 
 
+#[utoipa::path(
+    get, path = "/meridian/info",
+    tag = "Meridian",
+    responses((status = 200, description = "Meridian reporting system info and usage instructions"))
+)]
 async fn meridian_info() -> impl IntoResponse {
     Json(json!({
         "name": "Meridian — Validator Community Blacklist Reporting",
