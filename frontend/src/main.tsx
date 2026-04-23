@@ -11,6 +11,7 @@ import { EpochDetailPage } from './pages/EpochDetailPage.tsx'
 import { SourcesPageRoute } from './pages/SourcesPageRoute.tsx'
 import { SuggestSourcePage } from './pages/SuggestSourcePage.tsx'
 import { MeridianVotingPage } from './pages/MeridianVotingPage.tsx'
+import { ApiDocsPage } from './pages/ApiDocsPage.tsx'
 import { NotFoundPage } from './pages/NotFoundPage.tsx'
 
 const router = createBrowserRouter(
@@ -28,6 +29,7 @@ const router = createBrowserRouter(
         { path: 'sources/suggest',       element: <SuggestSourcePage /> },
         { path: 'vote',                  element: <MeridianVotingPage /> },
         { path: 'vote/:pubkey',          element: <MeridianVotingPage /> },
+        { path: 'api-docs',              element: <ApiDocsPage /> },
         { path: '*',                     element: <NotFoundPage /> },
       ],
     },

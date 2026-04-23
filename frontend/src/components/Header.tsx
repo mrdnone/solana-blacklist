@@ -63,6 +63,42 @@ export function Header() {
             </svg>
             Sources
           </NavLink>
+
+          {/* Divider */}
+          <span className="w-px h-6 self-center bg-white/[0.08]" />
+
+          {/* API Docs — internal */}
+          <NavLink
+            to="/api-docs"
+            className={({ isActive }) =>
+              `inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border rounded-full px-5 py-2 transition-all duration-300 ${
+                isActive
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-400'
+                  : 'border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-400/70 hover:text-cyan-400 hover:border-cyan-500/40 hover:bg-cyan-500/10'
+              }`
+            }
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+            </svg>
+            API Docs
+          </NavLink>
+
+          {/* Swagger — external */}
+          <a
+            href={`${import.meta.env.VITE_API_ORIGIN ?? ''}/docs`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-white/[0.1] rounded-full px-5 py-2 text-text-muted hover:text-text-primary hover:border-white/[0.2] transition-all duration-300"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+            </svg>
+            Swagger
+            <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+            </svg>
+          </a>
         </div>
       </div>
     </header>
