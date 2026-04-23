@@ -1,8 +1,8 @@
-//! Meridian — community validator voting for blacklist entries.
+//! Meridian — community validator reporting for blacklist entries.
 //!
 //! Active validators sign a canonical message with their identity keypair
-//! to vote for blacklisting a target vote account. Once a target reaches
-//! ≥ VOTE_THRESHOLD unique validator votes it is added to the blacklist.
+//! to report a target vote account for blacklisting. Once a target reaches
+//! ≥ VOTE_THRESHOLD unique validator reports it is added to the blacklist.
 
 use anyhow::{Result, anyhow, bail};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -50,8 +50,8 @@ pub fn canonical_message(target_vote_pubkey: &str, timestamp_secs: i64) -> Strin
 /// The `timestamp_secs` must be within TIMESTAMP_WINDOW_SECS of now.
 ///
 /// `active_identities` must contain the set of known active validator identity
-/// pubkeys (base58). The voter is rejected if their identity is absent from this
-/// set, preventing non-validators from submitting votes regardless of signature
+/// pubkeys (base58). The reporter is rejected if their identity is absent from this
+/// set, preventing non-validators from submitting reports regardless of signature
 /// validity. Callers are responsible for keeping this set up to date.
 pub fn verify_vote(
     voter_identity_b58: &str,

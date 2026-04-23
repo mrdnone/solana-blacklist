@@ -124,7 +124,7 @@ function MeridianVotes({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[0.65rem] tracking-[2px] uppercase text-text-muted font-mono mb-0.5">
-            Meridian Community Votes
+            Community Blacklist Reports
           </p>
           <p className="text-[0.9rem] font-mono text-text-primary">
             <span className={data.vote_count >= data.threshold ? 'text-rose-400' : 'text-amber-400'}>
@@ -138,14 +138,14 @@ function MeridianVotes({
             onClick={onVotePageClick}
             className="text-[0.72rem] tracking-[1px] uppercase font-mono border border-white/[0.08] rounded-lg px-3 py-1.5 text-text-secondary hover:text-text-primary hover:border-white/[0.2] transition-all duration-200"
           >
-            View votes
+            View reports
           </button>
           {onVote && (
             <button
               onClick={() => onVote(voteIdentity)}
               className="text-[0.72rem] tracking-[2px] uppercase font-mono border border-amber-500/20 bg-amber-500/[0.06] rounded-lg px-3 py-1.5 text-amber-400/80 hover:text-amber-400 hover:border-amber-500/40 transition-all duration-200"
             >
-              ⚡ Vote
+              🚩 Report
             </button>
           )}
         </div>

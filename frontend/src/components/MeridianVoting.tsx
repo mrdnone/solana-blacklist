@@ -86,7 +86,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
         voted_at_ts: voteTimestamp!,
         reason: effectiveReason,
       })
-      setSubmitResult(res.inserted ? 'Vote recorded successfully!' : 'Vote already exists.')
+      setSubmitResult(res.inserted ? 'Report recorded successfully!' : 'Report already exists.')
       setVoterIdentity('')
       setSignature('')
       setSelectedReason(null)
@@ -123,10 +123,10 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
       {/* Title */}
       <div>
         <h2 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-semibold tracking-[4px] uppercase bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-          Meridian Voting
+          Meridian Blacklist Reports
         </h2>
         <p className="mt-3 text-[0.88rem] text-text-secondary leading-relaxed">
-          Community-driven validator blacklisting through cryptographic voting.
+          Community-driven validator blacklisting through cryptographic reporting.
         </p>
       </div>
 
@@ -138,14 +138,14 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
           </li>
           <li>Paste the signature proof along with your validator identity pubkey.</li>
           <li>
-            Once a target reaches <strong className="text-amber-300">{votes.data?.threshold ?? 10} votes</strong>, it
+            Once a target reaches <strong className="text-amber-300">{votes.data?.threshold ?? 10} reports</strong>, it
             will be reviewed by Meridian and may be added to the blacklist.
           </li>
         </ul>
       </Section>
 
       {/* Section 2: Vote to Blacklist */}
-      <Section title="Vote to Blacklist">
+      <Section title="Report to Blacklist">
         <div className="space-y-4">
           <div>
             <label className="block text-[0.75rem] tracking-[2px] uppercase text-text-muted mb-2 font-mono">
@@ -289,7 +289,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                 disabled={submitLoading || !voterIdentity.trim() || !signature.trim() || !reasonValid || secondsLeft === 0}
                 className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono bg-amber-500/15 border border-amber-500/30 rounded-lg px-6 py-2.5 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {submitLoading ? 'Submitting...' : 'Submit Vote'}
+                {submitLoading ? 'Submitting...' : 'Submit Report'}
               </button>
             </div>
           )}
@@ -308,9 +308,9 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
       </Section>
 
       {/* Section 3: Current Votes */}
-      <Section title="Current Votes">
+      <Section title="Current Reports">
         {votes.isLoading && !votes.data ? (
-          <div className="text-text-muted text-[0.82rem] py-4">Loading votes...</div>
+          <div className="text-text-muted text-[0.82rem] py-4">Loading reports...</div>
         ) : votes.error ? (
           <div className="text-rose-300 text-[0.82rem] py-4">
             Error: {votes.error}{' '}
@@ -319,7 +319,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
             </button>
           </div>
         ) : !votes.data?.targets.length ? (
-          <div className="text-text-muted text-[0.82rem] py-4">No votes recorded yet.</div>
+          <div className="text-text-muted text-[0.82rem] py-4">No reports recorded yet.</div>
         ) : (
           <div className="space-y-2">
             {votes.data.targets.map((t) => {
@@ -397,7 +397,7 @@ function VoteDetailPanel({
 }) {
   if (isLoading) return <div className="px-4 py-3 text-[0.78rem] text-text-muted">Loading details...</div>
   if (error) return <div className="px-4 py-3 text-[0.78rem] text-rose-300">Error: {error}</div>
-  if (!detail?.votes.length) return <div className="px-4 py-3 text-[0.78rem] text-text-muted">No votes yet.</div>
+  if (!detail?.votes.length) return <div className="px-4 py-3 text-[0.78rem] text-text-muted">No reports yet.</div>
 
   return (
     <div className="ml-4 mt-1 rounded-lg border border-white/[0.04] bg-[#0a0a14] p-4 space-y-2">

@@ -27,7 +27,7 @@ use solana_blacklist::persistence::FirstSeenStore;
 
 // ── OpenAPI doc ───────────────────────────────────────────────────────────────
 
-/// Vote cast by a validator
+/// Report submitted by a validator
 #[derive(Serialize, ToSchema)]
 struct VoteSchema {
     voter_identity: String,
@@ -37,14 +37,14 @@ struct VoteSchema {
     reason: Option<String>,
 }
 
-/// A target with its vote count
+/// A target with its report count
 #[derive(Serialize, ToSchema)]
 struct VoteTargetSchema {
     target_vote_pubkey: String,
     vote_count: u64,
 }
 
-/// Request body for submitting a vote
+/// Request body for submitting a blacklist report
 #[derive(Deserialize, ToSchema)]
 #[allow(dead_code)]
 struct VoteSubmitSchema {
@@ -59,7 +59,7 @@ struct VoteSubmitSchema {
 #[openapi(
     info(
         title = "Solana Blacklist API",
-        description = "Aggregated Solana validator blacklist with community voting (Meridian).",
+        description = "Aggregated Solana validator blacklist with community blacklist reporting (Meridian).",
         version = "1.0.0"
     ),
     paths(
@@ -80,7 +80,7 @@ struct VoteSubmitSchema {
     ),
     tags(
         (name = "Blacklist", description = "Aggregated blacklist endpoints"),
-        (name = "Meridian", description = "Community validator voting"),
+        (name = "Meridian", description = "Community validator blacklist reporting"),
         (name = "Admin", description = "Admin operations — require X-Admin-Key header"),
     ),
     modifiers(&SecurityAddon),
@@ -165,7 +165,7 @@ async fn api_list_sources(State(state): State<AppState>) -> impl IntoResponse {
         map.entry(solana_blacklist::meridian::MERIDIAN_SOURCE_NAME.to_string())
             .or_insert_with(|| json!({
                 "name": solana_blacklist::meridian::MERIDIAN_SOURCE_NAME,
-                "description": "Community-voted blacklist via Meridian validator voting",
+                "description": "Community-reported blacklist via Meridian validator reporting",
             }));
     }
     Json(sources)
@@ -429,7 +429,7 @@ async fn get_epoch_detail(
     tag = "Meridian",
     request_body = VoteSubmitSchema,
     responses(
-        (status = 200, description = "Vote accepted"),
+        (status = 200, description = "Report accepted"),
         (status = 400, description = "Invalid request or stale timestamp"),
     )
 )]
@@ -504,7 +504,7 @@ async fn api_vote_submit(
 #[utoipa::path(
     get, path = "/votes",
     tag = "Meridian",
-    responses((status = 200, description = "All vote targets with counts", body = Vec<VoteTargetSchema>))
+    responses((status = 200, description = "All report targets with counts", body = Vec<VoteTargetSchema>))
 )]
 async fn api_votes_list(State(state): State<AppState>) -> ApiResult<Response> {
     let store = state.store.lock().unwrap();
@@ -521,7 +521,7 @@ async fn api_votes_list(State(state): State<AppState>) -> ApiResult<Response> {
     tag = "Meridian",
     params(("target" = String, Path, description = "Target vote account pubkey")),
     responses(
-        (status = 200, description = "Vote detail for target", body = Vec<VoteSchema>),
+        (status = 200, description = "Report detail for target", body = Vec<VoteSchema>),
         (status = 400, description = "Invalid pubkey"),
     )
 )]
@@ -552,19 +552,18 @@ async fn api_vote_detail(
 
 async fn meridian_info() -> impl IntoResponse {
     Json(json!({
-        "name": "Meridian — Validator Community Voting Blacklist",
-        "description": "Active validators sign a canonical message to vote for blacklisting a target. Threshold: 10 votes.",
-        "how_to_vote": [
+        "name": "Meridian — Validator Community Blacklist Reporting",
+        "description": "Active validators sign a canonical message to report a target for blacklisting. Threshold: 10 reports.",
+        "how_to_report": [
             "1. Choose the target vote account pubkey to blacklist.",
             "2. Build the canonical message: meridian:blacklist:<target_vote_pubkey>",
             "3. Sign with your validator identity keypair: solana sign-offchain-message -k <identity-keypair> <message>",
             "4. POST /votes with { voter_identity, target_vote_pubkey, signature }"
         ],
         "endpoints": {
-            "POST /votes": "Submit a vote",
-            "GET /votes": "List all targets with vote counts",
-            "GET /votes/{target}": "Get votes for a specific target",
-            "GET /meridian": "Voting UI (HTML)",
+            "POST /votes": "Submit a report",
+            "GET /votes": "List all targets with report counts",
+            "GET /votes/{target}": "Get reports for a specific target",
             "GET /meridian/info": "This endpoint"
         }
     }))
@@ -577,7 +576,7 @@ async fn meridian_info() -> impl IntoResponse {
     tag = "Admin",
     security(("admin_key" = [])),
     responses(
-        (status = 200, description = "All votes ever cast", body = Vec<VoteSchema>),
+        (status = 200, description = "All reports ever submitted", body = Vec<VoteSchema>),
         (status = 401, description = "Unauthorized"),
         (status = 503, description = "Admin not configured"),
     )
@@ -600,7 +599,7 @@ async fn api_admin_list_votes(
     security(("admin_key" = [])),
     params(("pubkey" = String, Path, description = "Validator identity or vote account pubkey")),
     responses(
-        (status = 200, description = "Votes involving this validator", body = Vec<VoteSchema>),
+        (status = 200, description = "Reports involving this validator", body = Vec<VoteSchema>),
         (status = 401, description = "Unauthorized"),
     )
 )]
@@ -786,7 +785,6 @@ async fn main() {
         .allow_headers(Any);
 
     let api_router = Router::new()
-        .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", ApiDoc::openapi()))
         .route("/sources", get(api_list_sources))
         .route("/blacklist", get(api_get_blacklist))
         .route("/blacklist/{pubkey}", get(api_get_pubkey))
@@ -809,6 +807,7 @@ async fn main() {
     // index.html for any path that doesn't match a real file, so React Router
     // can handle client-side routing on hard refresh or direct links.
     let app = Router::new()
+        .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", ApiDoc::openapi()))
         .nest("/api", api_router)
         .nest_service(
             "/blacklist",
