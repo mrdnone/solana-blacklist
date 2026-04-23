@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prevent overlapping deploys
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: Sync source files to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            --exclude='.git/' \
+            --exclude='target/' \
+            --exclude='frontend/node_modules/' \
+            --exclude='data/' \
+            --exclude='.env' \
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/solana-blacklist/
+
+      - name: Write .env on server
+        env:
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+          SANDWICHED_ME_API_KEY: ${{ secrets.SANDWICHED_ME_API_KEY }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: |
+          {
+            echo "BLACKLIST_DB_PATH=/data/blacklist.db"
+            echo "SOLANA_RPC_URL=${SOLANA_RPC_URL}"
+            echo "BLACKLIST_REFRESH_SECS=300"
+            echo "BLACKLIST_FILTER_INACTIVE=true"
+            echo "ADMIN_KEY=${ADMIN_KEY}"
+            echo "SANDWICHED_ME_API_KEY=${SANDWICHED_ME_API_KEY}"
+          } > /tmp/deploy.env
+
+          scp -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=yes \
+              /tmp/deploy.env \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/solana-blacklist/.env
+
+      - name: Rebuild and restart
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=yes \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "cd /opt/solana-blacklist && mkdir -p data && docker compose up -d --build --remove-orphans"
+
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=yes \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "docker compose -f /opt/solana-blacklist/docker-compose.yml ps"
