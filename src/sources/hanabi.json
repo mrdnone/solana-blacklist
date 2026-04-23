@@ -1,7 +1,7 @@
 {
   "name": "hanabi",
   "url": "https://api.hanabi.so/validators/sandwiching-report",
-  "contact_into": {
+  "contact_info": {
     "website": "https://hanabi.so/sandwiching"
   },
   "handler": "Json",

@@ -4,7 +4,7 @@
   "fetch_headers": {
     "X-API-KEY": "${SANDWICHED_ME_API_KEY}"
   },
-  "contact_into": {
+  "contact_info": {
     "website": "https://sandwiched.me",
     "telegram": "https://t.me/ghostlogsxyz"
   },

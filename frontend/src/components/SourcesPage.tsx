@@ -56,7 +56,7 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
           {sources.map((s) => {
             const name = String(s.name ?? '')
             const isMeridian = name === 'meridian'
-            const contact = s.contact_into as Record<string, string> | null | undefined
+            const contact = s.contact_info as Record<string, string> | null | undefined
             const handler = s.handler
             const handlerLabel = handler === 'Json' || handler === 'json'
               ? 'JSON API'

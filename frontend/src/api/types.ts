@@ -28,10 +28,17 @@ export interface PubkeyLookupResult {
   in_validators_db?: boolean
 }
 
+export interface ContactInfo {
+  website?: string
+  discord?: string
+  telegram?: string
+}
+
 export interface SourceConfig {
   name: string
   url: string
   handler: unknown
+  contact_info?: ContactInfo
   [key: string]: unknown
 }
 

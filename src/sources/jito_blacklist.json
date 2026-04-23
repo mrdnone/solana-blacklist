@@ -1,7 +1,9 @@
 {
   "name": "jito",
   "url": "https://docs.google.com/spreadsheets/d/1S6HWr6KyVuRkgyG-liYmGA1gGTtKWCFr2qwP1sZPDoc/export?format=csv",
-  "contact_into": null,
+  "contact_info": {
+    "discord": "https://discord.gg/jito"
+  },
   "handler": {
     "Csv": {
       "delimiter": 44,

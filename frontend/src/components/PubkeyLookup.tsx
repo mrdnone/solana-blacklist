@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { PubkeyLookupResult } from '../api/types'
 import { truncatePubkey } from '../lib/truncate'
 import { SourceBadge } from './SourceBadge'
+import { AppealLinks } from './AppealLinks'
+import { useSources } from '../hooks/useSources'
 
 interface Props {
   onLookup: (pubkey: string) => void
@@ -14,6 +16,7 @@ interface Props {
 
 export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onViewValidator }: Props) {
   const [input, setInput] = useState('')
+  const { data: sourcesData } = useSources()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,13 +98,16 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onVi
             <div className="space-y-2">
               <p className="text-[0.72rem] tracking-[2px] uppercase font-mono text-text-muted">Sources</p>
               {result.sources.map((s) => (
-                <div key={s.name} className="flex flex-col items-start gap-1">
+                <div key={s.name} className="flex flex-col items-start gap-0.5">
                   <SourceBadge name={s.name} size="sm" />
                   {s.reason ? (
                     <span className="text-[0.78rem] text-text-secondary leading-snug pl-1">{s.reason}</span>
                   ) : (
                     <span className="text-[0.72rem] text-text-muted italic leading-snug pl-1">no reason provided</span>
                   )}
+                  <div className="pl-1">
+                    <AppealLinks contactInfo={sourcesData?.[s.name]?.contact_info} />
+                  </div>
                 </div>
               ))}
             </div>

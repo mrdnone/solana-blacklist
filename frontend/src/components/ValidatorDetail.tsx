@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom'
-import type { ValidatorDetailResponse } from '../api/types'
+import type { ValidatorDetailResponse, SourcesResponse } from '../api/types'
 import { useVoteDetail } from '../hooks/useVoteDetail'
+import { useSources } from '../hooks/useSources'
 import { lookupPubkey } from '../api/endpoints'
 import { useEffect, useState } from 'react'
 import type { PubkeyLookupResult } from '../api/types'
 import { PubkeyCell } from './PubkeyCell'
 import { SourceBadge } from './SourceBadge'
+import { AppealLinks } from './AppealLinks'
 import { Spinner } from './Spinner'
 
 interface Props {
@@ -63,7 +65,7 @@ function ExternalLinks({ voteIdentity, identity }: { voteIdentity: string; ident
 
 // ── Blacklist status card ─────────────────────────────────────────────────────
 
-function BlacklistStatus({ lookup }: { lookup: PubkeyLookupResult | null }) {
+function BlacklistStatus({ lookup, sourcesData }: { lookup: PubkeyLookupResult | null; sourcesData: SourcesResponse | null }) {
   if (!lookup) return null
 
   if (!lookup.blacklisted) {
@@ -83,11 +85,14 @@ function BlacklistStatus({ lookup }: { lookup: PubkeyLookupResult | null }) {
       </div>
       <div className="flex flex-col gap-2">
         {lookup.sources.map((s, i) => (
-          <div key={`${s.name}-${i}`} className="flex flex-wrap items-start gap-2">
-            <SourceBadge name={s.name} size="md" />
-            {s.reason && (
-              <span className="text-[0.78rem] text-text-secondary leading-snug self-center">{s.reason}</span>
-            )}
+          <div key={`${s.name}-${i}`} className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <SourceBadge name={s.name} size="md" />
+              {s.reason && (
+                <span className="text-[0.78rem] text-text-secondary leading-snug">{s.reason}</span>
+              )}
+            </div>
+            <AppealLinks contactInfo={sourcesData?.[s.name]?.contact_info} />
           </div>
         ))}
       </div>
@@ -218,6 +223,7 @@ function EpochCalendar({
 export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, onVote }: Props) {
   const navigate = useNavigate()
   const [lookup, setLookup] = useState<PubkeyLookupResult | null>(null)
+  const { data: sourcesData } = useSources()
 
   useEffect(() => {
     if (!data?.vote_identity) return
@@ -306,7 +312,7 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
 
       {/* Two-column: blacklist status + meridian votes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <BlacklistStatus lookup={lookup} />
+        <BlacklistStatus lookup={lookup} sourcesData={sourcesData} />
         <MeridianVotes
           voteIdentity={data.vote_identity}
           onVote={onVote}

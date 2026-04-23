@@ -91,7 +91,7 @@ export function SuggestSource({ onBack }: Props) {
               <Field name="reason_template" type="string?" desc='Template with {$.path} placeholders, e.g. "Rate: {$.sandwichRate:.2}%"' />
               <Field name="name_path" type="string?" desc="JSONPath to extract the validator name from each record" />
               <Field name="fetch_headers" type="object?" desc="Extra HTTP headers to send with the request" />
-              <Field name="contact_into" type="object?" desc="Contact info for the source operator — website, discord, telegram, etc." />
+              <Field name="contact_info" type="object?" desc="Contact info for the source operator — website, discord, telegram, etc." />
             </tbody>
           </table>
         </div>
@@ -102,7 +102,7 @@ export function SuggestSource({ onBack }: Props) {
         <CodeBlock>{`{
   "name": "example_source",
   "url": "https://api.example.com/blacklist",
-  "contact_into": { "website": "https://example.com" },
+  "contact_info": { "website": "https://example.com" },
   "handler": "Json",
   "record_path": "$.data.validators[*]",
   "pubkey_path": "$.voteAccount",
@@ -116,7 +116,7 @@ export function SuggestSource({ onBack }: Props) {
         <CodeBlock>{`{
   "name": "example_csv",
   "url": "https://docs.google.com/spreadsheets/.../export?format=csv",
-  "contact_into": null,
+  "contact_info": null,
   "handler": { "Csv": { "delimiter": 44, "headers": true } },
   "filters": [],
   "record_path": null,
@@ -135,7 +135,7 @@ export function SuggestSource({ onBack }: Props) {
           <li>The source must be publicly accessible (no auth, or a public API key)</li>
           <li>It must return Solana validator vote-account pubkeys</li>
           <li>The data should be regularly updated by the source maintainer</li>
-          <li>Include contact info (<Code>contact_into</Code>) so we can reach the source operator</li>
+          <li>Include contact info (<Code>contact_info</Code>) so we can reach the source operator</li>
         </ul>
       </Section>
 

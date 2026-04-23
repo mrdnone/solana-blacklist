@@ -399,7 +399,7 @@ pub struct BlacklistSource {
     /// Optional HTTP headers for fetch. JSON only.
     pub fetch_headers: Option<HashMap<String, String>>,
     #[serde(default)]
-    pub contact_into: Value,
+    pub contact_info: Value,
     pub handler: BlacklistHandler,
     /// Optional: pre-select records before filters. JSON only. Defaults to "$".
     #[serde(default)]
@@ -1436,7 +1436,7 @@ mod tests {
             name: "test_source".to_string(),
             url: "http://example.com".to_string(),
             fetch_headers: None,
-            contact_into: Value::Null,
+            contact_info: Value::Null,
             handler: BlacklistHandler::Json,
             record_path: None,
             pubkey_path: "$.vote".to_string(),
@@ -1467,7 +1467,7 @@ mod tests {
             name: "test_source".to_string(),
             url: "http://example.com".to_string(),
             fetch_headers: None,
-            contact_into: Value::Null,
+            contact_info: Value::Null,
             handler: BlacklistHandler::Json,
             record_path: None,
             pubkey_path: "$.vote".to_string(),
@@ -1548,7 +1548,7 @@ mod tests {
             name: "test_source".to_string(),
             url: "http://example.com".to_string(),
             fetch_headers: None,
-            contact_into: Value::Null,
+            contact_info: Value::Null,
             handler: BlacklistHandler::Json,
             record_path: None,
             pubkey_path: "$.vote".to_string(),

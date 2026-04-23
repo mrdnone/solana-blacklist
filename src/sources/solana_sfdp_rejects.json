@@ -1,7 +1,7 @@
 {
   "name": "sfdp_rejects",
   "url": "https://api.solana.org/api/community/v1/sfdp_participants",
-  "contact_into": {
+  "contact_info": {
     "discord": "https://solana.com/discord",
     "website": "https://solana.com"
   },
