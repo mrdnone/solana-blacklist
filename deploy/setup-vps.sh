@@ -1,105 +1,90 @@
 #!/usr/bin/env bash
-# VPS bootstrap script for solana-blacklist.
-# Run ONCE on a fresh Ubuntu 22.04/24.04 server as root:
+# One-time VPS bootstrap for solana-blacklist.
+# Installs Docker, sets up Traefik + Watchtower, and starts the app.
 #
-#   bash setup-vps.sh
+# Usage (as root or sudo):
+#   ACME_EMAIL=you@example.com \
+#   GHCR_USER=your-github-user \
+#   GHCR_TOKEN=ghp_xxx \
+#   ./setup-vps.sh
 #
-# After this script completes:
-#   1. Add the GitHub Actions secrets (see README → Deployment).
-#   2. Push to main — the workflow will do all subsequent deploys.
+# Re-running is safe (idempotent).
 
 set -euo pipefail
 
-DOMAIN="solana.mrdn.one"
 APP_DIR="/opt/solana-blacklist"
-DEPLOY_USER="deploy"
+APP_USER="${SUDO_USER:-$USER}"
 
-echo "==> [1/7] System update"
-apt-get update -qq && apt-get upgrade -y -qq
-
-echo "==> [2/7] Install dependencies"
-apt-get install -y -qq \
-    curl git rsync ufw \
-    nginx certbot python3-certbot-nginx
-
-echo "==> [3/7] Install Docker"
-if ! command -v docker &>/dev/null; then
-    curl -fsSL https://get.docker.com | sh
+echo "==> Installing Docker (if missing)..."
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
 fi
-# Ensure Docker Compose plugin is available
-docker compose version &>/dev/null || apt-get install -y -qq docker-compose-plugin
+systemctl enable --now docker
 
-echo "==> [4/7] Create deploy user"
-if ! id "$DEPLOY_USER" &>/dev/null; then
-    useradd -m -s /bin/bash "$DEPLOY_USER"
+echo "==> Ensuring '${APP_USER}' is in docker group..."
+if id "$APP_USER" >/dev/null 2>&1; then
+  usermod -aG docker "$APP_USER" || true
 fi
-usermod -aG docker "$DEPLOY_USER"
 
-# Allow deploy user to manage the systemd service without a password
-cat > /etc/sudoers.d/deploy-solana-blacklist <<'EOF'
-deploy ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart solana-blacklist-api, /usr/bin/systemctl status solana-blacklist-api
+echo "==> Creating shared 'web' network (Traefik <-> app)..."
+docker network inspect web >/dev/null 2>&1 || docker network create web
+
+echo "==> Creating ${APP_DIR} ..."
+mkdir -p "${APP_DIR}/data" "${APP_DIR}/traefik/letsencrypt"
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+
+# -- Traefik + Watchtower stack ------------------------------------------------
+if [[ -z "${ACME_EMAIL:-}" ]]; then
+  echo "ERROR: ACME_EMAIL env var is required (for Let's Encrypt)." >&2
+  exit 1
+fi
+
+echo "==> Writing Traefik stack env..."
+cat > "${APP_DIR}/traefik/.env" <<EOF
+ACME_EMAIL=${ACME_EMAIL}
+GHCR_USER=${GHCR_USER:-}
+GHCR_TOKEN=${GHCR_TOKEN:-}
 EOF
-chmod 440 /etc/sudoers.d/deploy-solana-blacklist
+chmod 600 "${APP_DIR}/traefik/.env"
 
-echo "==> [5/7] Set up SSH key for GitHub Actions"
-DEPLOY_HOME=$(getent passwd "$DEPLOY_USER" | cut -d: -f6)
-mkdir -p "${DEPLOY_HOME}/.ssh"
-chmod 700 "${DEPLOY_HOME}/.ssh"
+# Copy the stack file next to the env
+cp "$(dirname "$0")/traefik-stack.yml" "${APP_DIR}/traefik/docker-compose.yml"
 
-if [[ ! -f "${DEPLOY_HOME}/.ssh/authorized_keys" ]]; then
-    touch "${DEPLOY_HOME}/.ssh/authorized_keys"
-fi
-chmod 600 "${DEPLOY_HOME}/.ssh/authorized_keys"
-
-# Generate a deployment keypair (private key goes to GitHub secret DEPLOY_SSH_KEY)
-if [[ ! -f "${DEPLOY_HOME}/.ssh/deploy_ed25519" ]]; then
-    ssh-keygen -t ed25519 -C "github-actions-deploy" -N "" -f "${DEPLOY_HOME}/.ssh/deploy_ed25519"
-    cat "${DEPLOY_HOME}/.ssh/deploy_ed25519.pub" >> "${DEPLOY_HOME}/.ssh/authorized_keys"
+# GHCR login so Watchtower can pull private images (safe for public too)
+if [[ -n "${GHCR_USER:-}" && -n "${GHCR_TOKEN:-}" ]]; then
+  echo "==> Logging into GHCR..."
+  echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 fi
 
-chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${DEPLOY_HOME}/.ssh"
+echo "==> Starting Traefik + Watchtower..."
+(cd "${APP_DIR}/traefik" && docker compose up -d)
 
-echo ""
-echo ">>> COPY THIS PRIVATE KEY to GitHub secret DEPLOY_SSH_KEY <<<"
-echo "------------------------------------------------------------------------"
-cat "${DEPLOY_HOME}/.ssh/deploy_ed25519"
-echo "------------------------------------------------------------------------"
-echo ""
-
-echo "==> [6/7] Prepare app directory"
-mkdir -p "${APP_DIR}/data"
-chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}"
-
-echo "==> [7/7] Firewall"
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw --force enable
-
-echo ""
-echo "==> TLS certificate (requires DNS A record for ${DOMAIN} → $(curl -s ifconfig.me))"
-read -rp "Obtain TLS certificate via Certbot now? [y/N] " CERT
-if [[ "${CERT,,}" == "y" ]]; then
-    certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --email admin@mrdn.one
-else
-    echo "Skipping Certbot. Run manually when DNS is ready:"
-    echo "  certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos --email admin@mrdn.one"
+# -- App ----------------------------------------------------------------------
+if [[ ! -f "${APP_DIR}/.env" ]]; then
+  echo "==> Creating placeholder app .env (EDIT THIS)..."
+  cat > "${APP_DIR}/.env" <<'EOF'
+BLACKLIST_DB_PATH=/data/blacklist.db
+SOLANA_RPC_URL=
+BLACKLIST_REFRESH_SECS=300
+BLACKLIST_FILTER_INACTIVE=true
+ADMIN_KEY=
+SANDWICHED_ME_API_KEY=
+EOF
+  chmod 600 "${APP_DIR}/.env"
+  echo "    -> Edit ${APP_DIR}/.env, then re-run: (cd ${APP_DIR} && docker compose up -d)"
 fi
 
-echo ""
-echo "==========================================================="
-echo " Setup complete!"
-echo "==========================================================="
-echo ""
-echo " Next steps:"
-echo "  1. Set these GitHub Actions secrets (Settings → Secrets):"
-echo "     DEPLOY_HOST           178.104.218.193"
-echo "     DEPLOY_USER           ${DEPLOY_USER}"
-echo "     DEPLOY_SSH_KEY        (printed above)"
-echo "     DEPLOY_KNOWN_HOSTS    $(ssh-keyscan -H 178.104.218.193 2>/dev/null)"
-echo "     SOLANA_RPC_URL        https://api.mainnet-beta.solana.com"
-echo "     SANDWICHED_ME_API_KEY (your key)"
-echo "     ADMIN_KEY             (your admin key)"
-echo ""
-echo "  2. Push to main — GitHub Actions will deploy automatically."
-echo "==========================================================="
+# Copy app compose file if the repo is not checked out here
+if [[ ! -f "${APP_DIR}/docker-compose.yml" ]]; then
+  cp "$(dirname "$0")/../docker-compose.yml" "${APP_DIR}/docker-compose.yml"
+fi
+
+echo "==> Pulling and starting the app..."
+(cd "${APP_DIR}" && docker compose pull && docker compose up -d)
+
+echo
+echo "Done."
+echo "  App:       ${APP_DIR}"
+echo "  Traefik:   ${APP_DIR}/traefik"
+echo "  Domain:    point DNS A-record to this server -- Traefik will issue a cert."
+echo "  Updates:   push to main and Watchtower pulls the new image automatically."

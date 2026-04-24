@@ -1,73 +1,77 @@
-name: Deploy
+name: Build and Publish
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Prevent overlapping deploys
 concurrency:
-  group: deploy
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  deploy:
-    name: Deploy to VPS
+  get-tag:
+    name: Extract Cargo version
     runs-on: ubuntu-latest
+    outputs:
+      pkg-version: ${{ steps.pkg-version.outputs.pkg-version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read version from Cargo.toml
+        id: pkg-version
+        shell: bash
+        run: |
+          version=$(awk -F ' = ' '$1 ~ /^version/ { gsub(/["]/, "", $2); print $2; exit }' Cargo.toml)
+          echo "pkg-version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    needs: get-tag
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Sync source files to server
-        run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
-            --exclude='.git/' \
-            --exclude='target/' \
-            --exclude='frontend/node_modules/' \
-            --exclude='data/' \
-            --exclude='.env' \
-            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/solana-blacklist/
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Write .env on server
-        env:
-          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
-          SANDWICHED_ME_API_KEY: ${{ secrets.SANDWICHED_ME_API_KEY }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-        run: |
-          {
-            echo "BLACKLIST_DB_PATH=/data/blacklist.db"
-            echo "SOLANA_RPC_URL=${SOLANA_RPC_URL}"
-            echo "BLACKLIST_REFRESH_SECS=300"
-            echo "BLACKLIST_FILTER_INACTIVE=true"
-            echo "ADMIN_KEY=${ADMIN_KEY}"
-            echo "SANDWICHED_ME_API_KEY=${SANDWICHED_ME_API_KEY}"
-          } > /tmp/deploy.env
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          scp -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=yes \
-              /tmp/deploy.env \
-              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/solana-blacklist/.env
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.get-tag.outputs.pkg-version }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Rebuild and restart
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=yes \
-              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-              "cd /opt/solana-blacklist && mkdir -p data && docker compose up -d --build --remove-orphans"
-
-      - name: Verify deployment
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=yes \
-              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-              "docker compose -f /opt/solana-blacklist/docker-compose.yml ps"
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max

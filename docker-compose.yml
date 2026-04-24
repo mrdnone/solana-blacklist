@@ -1,22 +1,37 @@
 services:
   api:
-    build: .
+    image: ghcr.io/mrdnone/solana-blacklist:latest
+    container_name: solana-blacklist
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      # Persistent SQLite database
-      - ./data:/data
     env_file:
       - .env
-    environment:
-      - BLACKLIST_DB_PATH=/data/blacklist.db
-      - BLACKLIST_REFRESH_SECS=300
-      # Set ADMIN_KEY and SOLANA_RPC_URL in .env (see .env.example).
-      # Run: cp .env.example .env  — before first docker compose up.
+    volumes:
+      - ./data:/data
+    networks:
+      - web
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/sources"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/sources"]
       interval: 30s
-      timeout: 10s
-      start_period: 60s
+      timeout: 5s
       retries: 3
+      start_period: 20s
+    labels:
+      # Watchtower: auto-pull new images
+      - "com.centurylinklabs.watchtower.enable=true"
+      # Traefik: routing + TLS
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.solana-blacklist.rule=Host(`solana.mrdn.one`)"
+      - "traefik.http.routers.solana-blacklist.entrypoints=websecure"
+      - "traefik.http.routers.solana-blacklist.tls=true"
+      - "traefik.http.routers.solana-blacklist.tls.certresolver=letsencrypt"
+      - "traefik.http.services.solana-blacklist.loadbalancer.server.port=3000"
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.solana-blacklist-http.rule=Host(`solana.mrdn.one`)"
+      - "traefik.http.routers.solana-blacklist-http.entrypoints=web"
+      - "traefik.http.routers.solana-blacklist-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+networks:
+  web:
+    external: true

@@ -5,8 +5,6 @@
 **Validator trust intelligence for the Solana ecosystem**
 
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![React](https://img.shields.io/badge/UI-React%2019-61DAFB?style=flat-square&logo=react)](https://react.dev/)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 [![Live](https://img.shields.io/badge/Live-solana.mrdn.one-brightgreen?style=flat-square)](https://solana.mrdn.one/blacklist/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
