@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 sm:p-8 space-y-5">
+    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 sm:p-8 space-y-5">
       <h2 className="font-heading text-[1rem] tracking-[3px] uppercase text-text-primary font-medium">
         {title}
       </h2>
@@ -50,7 +50,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="p-4 rounded-lg bg-[#080810] border border-white/[0.04] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
+    <pre className="p-4 rounded-lg bg-[#131418] border border-white/[0.04] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
       {children}
     </pre>
   )
@@ -301,7 +301,7 @@ GET /api/blacklist?source=jito:blacklist
             <li>Get the current Unix timestamp (seconds): <Code>date +%s</Code></li>
             <li>Build the canonical message: <Code>meridian:blacklist:&lt;target&gt;:&lt;timestamp&gt;</Code></li>
             <li>Sign it with your validator identity keypair:<br />
-              <code className="block mt-1.5 bg-[#080810] border border-white/[0.04] rounded px-3 py-2 text-[0.75rem] text-amber-300/80 font-mono">
+              <code className="block mt-1.5 bg-[#131418] border border-white/[0.04] rounded px-3 py-2 text-[0.75rem] text-amber-300/80 font-mono">
                 solana sign-offchain-message -k &lt;identity-keypair&gt; "meridian:blacklist:&lt;target&gt;:&lt;ts&gt;"
               </code>
             </li>
@@ -365,7 +365,7 @@ Content-Type: application/json
       {/* ── Admin ── */}
 
       {/* ── Swagger link ── */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 flex items-center justify-between gap-4 flex-wrap">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <p className="text-[0.85rem] text-text-primary font-medium">Interactive API Explorer</p>
           <p className="text-[0.78rem] text-text-muted mt-0.5">Try every endpoint directly in the browser via Swagger UI.</p>

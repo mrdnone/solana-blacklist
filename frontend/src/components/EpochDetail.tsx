@@ -104,7 +104,7 @@ export function EpochDetail({ epoch, initialSearch = '', onBack, onValidatorClic
       </button>
 
       {/* Epoch header */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6">
         <h2 className="text-[1.5rem] font-heading font-semibold bg-gradient-to-r from-accent-green to-accent-purple bg-clip-text text-transparent">
           Epoch {epoch}
         </h2>
@@ -125,10 +125,10 @@ export function EpochDetail({ epoch, initialSearch = '', onBack, onValidatorClic
       </div>
 
       {/* Blacklisted validator table */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left">
-            <thead className="sticky top-0 z-10 bg-[#0d0d18]">
+            <thead className="sticky top-0 z-10 bg-[#17181e]">
               <tr className="border-b border-white/[0.06]">
                 {['Name', 'Vote Pubkey', 'Stake', 'Comm.', 'Blacklist Sources & Reason'].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-secondary">

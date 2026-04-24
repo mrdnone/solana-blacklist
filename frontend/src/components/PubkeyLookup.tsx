@@ -24,7 +24,7 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onVi
   }
 
   return (
-    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 transition-all duration-400 hover:border-white/[0.12] hover:shadow-[0_0_40px_rgba(20,241,149,0.06)]">
+    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 transition-all duration-400 hover:border-white/[0.12] hover:shadow-[0_0_40px_rgba(20,241,149,0.06)]">
       <h2 className="text-[0.72rem] tracking-[3px] uppercase text-text-muted font-mono mb-4">Pubkey Lookup</h2>
       <form onSubmit={handleSubmit} className="flex gap-3">
         <input

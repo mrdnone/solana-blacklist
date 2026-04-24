@@ -140,7 +140,7 @@ export function SuggestSource({ onBack }: Props) {
       </Section>
 
       {/* CTA */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-8 text-center space-y-4">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-8 text-center space-y-4">
         <p className="text-text-secondary text-[0.88rem]">
           Ready to contribute? Create the file directly on GitHub or open an issue to discuss first.
         </p>
@@ -173,7 +173,7 @@ export function SuggestSource({ onBack }: Props) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 sm:p-8 space-y-3">
+    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 sm:p-8 space-y-3">
       <h3 className="font-heading text-[1rem] tracking-[3px] uppercase text-text-primary font-medium">
         {title}
       </h3>
@@ -192,7 +192,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="mt-3 p-4 rounded-lg bg-[#080810] border border-white/[0.04] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
+    <pre className="mt-3 p-4 rounded-lg bg-[#131418] border border-white/[0.04] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
       {children}
     </pre>
   )

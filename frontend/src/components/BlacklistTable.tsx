@@ -29,7 +29,7 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
   }
 
   return (
-    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden transition-all duration-400 hover:border-white/[0.12]">
+    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] overflow-hidden transition-all duration-400 hover:border-white/[0.12]">
       {/* Progress bar for refetches */}
       {isLoading && !isFirstLoad && (
         <div className="h-px w-full bg-white/[0.04] overflow-hidden">
@@ -56,7 +56,7 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
             <col className="w-[12%]" />
           </colgroup>
           <thead className="sticky top-0 z-10">
-            <tr className="border-b border-white/[0.06] bg-[#0d0d18]">
+            <tr className="border-b border-white/[0.06] bg-[#17181e]">
               <th className="px-5 py-3 text-[0.68rem] font-mono font-normal tracking-[3px] uppercase text-text-secondary">
                 Name
               </th>

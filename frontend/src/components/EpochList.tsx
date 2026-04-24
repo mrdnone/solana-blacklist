@@ -56,7 +56,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
         Back to Blacklist
       </button>
 
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] overflow-hidden">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] overflow-hidden">
         <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-4">
           <h3 className="text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
             Stored Epochs <span className="text-text-primary">({countLabel})</span>
@@ -79,7 +79,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
         ) : (
           <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-left">
-              <thead className="sticky top-0 z-10 bg-[#0d0d18]">
+              <thead className="sticky top-0 z-10 bg-[#17181e]">
                 <tr className="border-b border-white/[0.06]">
                   {['Epoch', 'Validators', 'Total Stake', 'Avg Commission', 'Snapshotted'].map((h) => (
                     <th key={h} className="px-5 py-3 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-secondary">

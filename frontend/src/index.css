@@ -2,10 +2,10 @@
 
 @theme {
   /* Solana-accented dark palette — vivid green/purple on near-black */
-  --color-bg-primary: #060609;
-  --color-bg-secondary: #0a0a12;
-  --color-bg-card: #111122;
-  --color-bg-card-hover: #16163a;
+  --color-bg-primary: #0d0e11;
+  --color-bg-secondary: #13141a;
+  --color-bg-card: #1a1b1f;
+  --color-bg-card-hover: #21222c;
 
   --color-text-primary: #f0f0f8;
   --color-text-secondary: #b4b4cc;
@@ -41,9 +41,8 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse at 20% 20%, rgba(20, 241, 149, 0.03) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 10%, rgba(153, 69, 255, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(153, 69, 255, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 20%, rgba(20, 241, 149, 0.025) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 10%, rgba(153, 69, 255, 0.02) 0%, transparent 45%),
     var(--color-bg-primary);
 }
 
@@ -90,7 +89,7 @@ body::before {
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  background: radial-gradient(ellipse at 50% 0%, rgba(15, 15, 40, 0.6) 0%, transparent 70%);
+  background: radial-gradient(ellipse at 50% 0%, rgba(30, 30, 35, 0.5) 0%, transparent 70%);
 }
 
 .star {
@@ -168,19 +167,18 @@ body::before {
 
 /* Inputs and textareas: solid enough to distinguish from background */
 input, textarea, select {
-  background-color: rgba(10, 10, 25, 0.85);
+  background-color: rgba(19, 20, 24, 0.85);
   border-color: rgba(255, 255, 255, 0.14);
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: rgba(20, 241, 149, 0.35);
-  background-color: rgba(12, 12, 28, 0.95);
+  background-color: rgba(23, 24, 30, 0.95);
 }
 
-/* Cards: stronger border + more opaque base so they read over the starfield */
+/* Cards: stronger border so they read over the starfield — bg is set per component */
 .card-glow {
   border-color: rgba(255, 255, 255, 0.11);
-  background-color: #111122;
 }
 .hero-eclipse {
   position: relative;

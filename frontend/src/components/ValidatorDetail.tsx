@@ -120,7 +120,7 @@ function MeridianVotes({
   const pct = Math.min(100, Math.round((data.vote_count / data.threshold) * 100))
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#0d0d18]/60 px-5 py-4 space-y-3">
+    <div className="rounded-xl border border-white/[0.06] bg-[#17181e]/60 px-5 py-4 space-y-3">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[0.65rem] tracking-[2px] uppercase text-text-muted font-mono mb-0.5">
@@ -265,7 +265,7 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
 
       {/* Header card */}
       <div className={[
-        'card-glow rounded-2xl border bg-[#0d0d18] p-6 space-y-5',
+        'card-glow rounded-2xl border bg-[#17181e] p-6 space-y-5',
         isBlacklisted ? 'border-rose-500/20' : 'border-white/[0.06]',
       ].join(' ')}>
         {/* Avatar + name + addresses */}
@@ -321,7 +321,7 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
       </div>
 
       {/* Epoch blacklist calendar */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18]">
+      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e]">
         <div className="px-5 py-3 border-b border-white/[0.04] flex items-center justify-between">
           <h3 className="text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
             Epoch History

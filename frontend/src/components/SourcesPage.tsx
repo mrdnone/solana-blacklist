@@ -67,7 +67,7 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
             return (
               <div
                 key={name}
-                className="card-glow rounded-2xl border border-white/[0.06] bg-[#0d0d18] p-6 space-y-4 transition-all duration-400 hover:border-white/[0.12]"
+                className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 space-y-4 transition-all duration-400 hover:border-white/[0.12]"
               >
                 {/* Header row */}
                 <div className="flex items-center gap-3">

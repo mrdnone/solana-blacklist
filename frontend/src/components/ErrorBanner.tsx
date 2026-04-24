@@ -6,7 +6,7 @@ interface Props {
 
 export function ErrorBanner({ message, onDismiss, onRetry }: Props) {
   return (
-    <div className="card-glow rounded-xl border border-rose-400/15 bg-[#0d0d18] px-5 py-4 flex items-center gap-4">
+    <div className="card-glow rounded-xl border border-rose-400/15 bg-[#17181e] px-5 py-4 flex items-center gap-4">
       <div className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(255,100,100,0.4)] shrink-0" />
       <p className="text-[0.85rem] text-text-secondary flex-1">{message}</p>
       <div className="flex gap-2 shrink-0">

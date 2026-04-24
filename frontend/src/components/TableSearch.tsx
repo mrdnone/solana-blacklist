@@ -21,7 +21,7 @@ export function TableSearch({ value, onChange }: Props) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Filter results by pubkey, source, or reason..."
-        className="w-full rounded-xl border border-white/[0.08] bg-[#0d0d18] py-3 pl-11 pr-4 text-[0.85rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300 font-body"
+        className="w-full rounded-xl border border-white/[0.08] bg-[#17181e] py-3 pl-11 pr-4 text-[0.85rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300 font-body"
       />
       {value && (
         <button
