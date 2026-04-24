@@ -29,7 +29,7 @@ function ValidatorRow({ v, onValidatorClick }: { v: ValidatorMeta; onValidatorCl
   return (
     <tr
       onClick={() => onValidatorClick(v.vote_identity)}
-      className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer"
+      className="border-b border-white/[0.07] hover:bg-white/[0.05] transition-all duration-300 cursor-pointer"
     >
       <td className="px-4 py-2.5 text-[0.82rem] text-text-primary truncate max-w-[160px]" title={v.name ?? undefined}>
         {v.name ?? <span className="text-text-muted">—</span>}
@@ -95,7 +95,7 @@ export function ValidatorsList({ onBack, onValidatorClick }: Props) {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, vote pubkey, or node pubkey…"
-          className="flex-1 min-w-[200px] max-w-md bg-card-bg border border-white/[0.06] rounded-lg px-4 py-2.5 text-[0.82rem] text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent-green/30 transition-colors"
+          className="flex-1 min-w-[200px] max-w-md bg-[#0f0f22] border border-white/[0.14] rounded-lg px-4 py-2.5 text-[0.82rem] text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent-green/30 transition-colors"
         />
         <StatusFilter value={status} onChange={setStatus} />
       </div>
@@ -110,10 +110,10 @@ export function ValidatorsList({ onBack, onValidatorClick }: Props) {
       ) : (
         <>
           {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-card-bg/60 backdrop-blur-sm">
+          <div className="overflow-x-auto rounded-xl border border-white/[0.14] bg-[#0f0f22]">
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-white/[0.08] sticky top-0 bg-card-bg/90 backdrop-blur-sm z-10">
+                <tr className="border-b border-white/[0.10] sticky top-0 bg-[#0f0f22] z-10">
                   <th className="px-4 py-3 text-[0.7rem] tracking-[2px] uppercase text-text-muted font-medium">Name</th>
                   <th className="px-4 py-3 text-[0.7rem] tracking-[2px] uppercase text-text-muted font-medium">Vote Pubkey</th>
                   <th className="px-4 py-3 text-[0.7rem] tracking-[2px] uppercase text-text-muted font-medium">Stake</th>

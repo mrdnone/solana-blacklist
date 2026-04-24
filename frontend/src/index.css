@@ -4,15 +4,15 @@
   /* Solana-accented dark palette — vivid green/purple on near-black */
   --color-bg-primary: #060609;
   --color-bg-secondary: #0a0a12;
-  --color-bg-card: #0d0d18;
-  --color-bg-card-hover: #12122a;
+  --color-bg-card: #111122;
+  --color-bg-card-hover: #16163a;
 
   --color-text-primary: #f0f0f8;
   --color-text-secondary: #b4b4cc;
   --color-text-muted: #7a7a98;
 
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-glow: rgba(255, 255, 255, 0.12);
+  --color-border-subtle: rgba(255, 255, 255, 0.11);
+  --color-border-glow: rgba(255, 255, 255, 0.22);
 
   --color-accent-green: #14F195;
   --color-accent-purple: #9945FF;
@@ -100,34 +100,34 @@ body::before {
 }
 
 .star--distant {
-  background: rgba(200, 210, 255, 0.7);
+  background: rgba(200, 210, 255, 0.35);
 }
 
 .star--mid {
-  background: rgba(220, 225, 255, 0.85);
-  box-shadow: 0 0 2px rgba(200, 210, 255, 0.3);
+  background: rgba(220, 225, 255, 0.45);
+  box-shadow: 0 0 2px rgba(200, 210, 255, 0.12);
 }
 
 .star--bright {
-  background: #fff;
-  box-shadow: 0 0 6px 2px rgba(200, 215, 255, 0.5), 0 0 14px 4px rgba(180, 200, 255, 0.15);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 4px 1px rgba(200, 215, 255, 0.2), 0 0 8px 2px rgba(180, 200, 255, 0.07);
 }
 
 @keyframes twinkle {
-  0%, 100% { opacity: 0.1; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.2); }
+  0%, 100% { opacity: 0.08; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
 }
 
 .shooting-star {
   position: absolute;
   width: 120px;
   height: 1px;
-  background: linear-gradient(270deg, rgba(255, 255, 255, 0.9), transparent);
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.5), transparent);
   border-radius: 1px;
   opacity: 0;
   transform: rotate(145deg);
   animation: shoot 1s ease-out forwards;
-  box-shadow: 0 0 6px rgba(200, 215, 255, 0.4);
+  box-shadow: 0 0 4px rgba(200, 215, 255, 0.2);
 }
 
 @keyframes shoot {
@@ -163,8 +163,25 @@ body::before {
 }
 
 /* ============================================
-   HERO ECLIPSE BACKGROUND
+   INPUT & CARD VISIBILITY
    ============================================ */
+
+/* Inputs and textareas: solid enough to distinguish from background */
+input, textarea, select {
+  background-color: rgba(10, 10, 25, 0.85);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: rgba(20, 241, 149, 0.35);
+  background-color: rgba(12, 12, 28, 0.95);
+}
+
+/* Cards: stronger border + more opaque base so they read over the starfield */
+.card-glow {
+  border-color: rgba(255, 255, 255, 0.11);
+  background-color: #111122;
+}
 .hero-eclipse {
   position: relative;
   overflow: hidden;
