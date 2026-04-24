@@ -1,8 +1,11 @@
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:v3.2
     container_name: traefik
     restart: unless-stopped
+    environment:
+      # Force modern Docker Engine API (older defaults break on Docker 29+)
+      DOCKER_API_VERSION: "1.47"
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
