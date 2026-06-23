@@ -96,37 +96,10 @@ impl BlacklistCollector {
         .collect::<Vec<_>>()
         .await;
 
-        // Drain per-source results. A single failing upstream (e.g. a source
-        // whose API goes 404/down) must NOT abort the whole cycle — otherwise
-        // epoch detection, the active-filter and the epoch-snapshot insert below
-        // never run, freezing the product. Log failures and continue with the
-        // sources that succeeded. Only bail if EVERY source failed, since
-        // proceeding with zero blacklist entries would wipe the epoch's flags.
-        let mut pairs: Vec<(String, BlacklistResultEntrySource)> = Vec::new();
-        let mut ok_sources = 0usize;
-        let mut failed_sources = 0usize;
-        for r in results {
-            match r {
-                Ok(rows) => {
-                    ok_sources += 1;
-                    pairs.extend(rows);
-                }
-                Err(err) => {
-                    failed_sources += 1;
-                    eprintln!("[collector] skipping failed source: {err:#}");
-                }
-            }
-        }
-        if ok_sources == 0 {
-            return Err(anyhow!(
-                "all {failed_sources} blacklist source(s) failed; aborting cycle to avoid wiping the epoch blacklist"
-            ));
-        }
-        if failed_sources > 0 {
-            eprintln!(
-                "[collector] {ok_sources} source(s) ok, {failed_sources} failed — continuing with partial data"
-            );
-        }
+        // Drain per-source results, tolerating individual upstream failures.
+        // See `drain_source_results` for the policy (continue on partial
+        // failure, abort only when every source failed).
+        let pairs = drain_source_results(results)?;
 
         let mut map: BTreeMap<String, BTreeSet<BlacklistResultEntrySource>> = BTreeMap::new();
         for (pk, rr) in pairs {
@@ -469,6 +442,49 @@ impl Default for BlacklistOptions {
             solana_rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
         }
     }
+}
+
+/// Combine the per-source fetch results into a single flat list of
+/// (pubkey, source) pairs, tolerating individual source failures.
+///
+/// A single failing upstream (e.g. a source whose API goes 404/down) must NOT
+/// abort the whole collection cycle — otherwise epoch detection, the
+/// active-filter and the epoch-snapshot insert downstream never run, freezing
+/// the product (this is exactly the Hanabi-404 failure that froze snapshots).
+///
+/// Policy:
+/// - Successful sources contribute their rows; failed sources are logged and skipped.
+/// - If *every* source failed, return `Err` so the caller aborts the cycle —
+///   proceeding with zero entries would wipe the epoch's blacklist flags.
+fn drain_source_results(
+    results: Vec<Result<Vec<(String, BlacklistResultEntrySource)>>>,
+) -> Result<Vec<(String, BlacklistResultEntrySource)>> {
+    let mut pairs: Vec<(String, BlacklistResultEntrySource)> = Vec::new();
+    let mut ok_sources = 0usize;
+    let mut failed_sources = 0usize;
+    for r in results {
+        match r {
+            Ok(rows) => {
+                ok_sources += 1;
+                pairs.extend(rows);
+            }
+            Err(err) => {
+                failed_sources += 1;
+                eprintln!("[collector] skipping failed source: {err:#}");
+            }
+        }
+    }
+    if ok_sources == 0 {
+        return Err(anyhow!(
+            "all {failed_sources} blacklist source(s) failed; aborting cycle to avoid wiping the epoch blacklist"
+        ));
+    }
+    if failed_sources > 0 {
+        eprintln!(
+            "[collector] {ok_sources} source(s) ok, {failed_sources} failed — continuing with partial data"
+        );
+    }
+    Ok(pairs)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1154,6 +1170,57 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    fn src(name: &str) -> BlacklistResultEntrySource {
+        BlacklistResultEntrySource {
+            name: name.to_string(),
+            reason: None,
+            validator_name: None,
+        }
+    }
+
+    /// All sources succeed → every row is kept.
+    #[test]
+    fn drain_keeps_all_rows_when_all_sources_succeed() {
+        let results = vec![
+            Ok(vec![("pk_a".to_string(), src("jito"))]),
+            Ok(vec![
+                ("pk_b".to_string(), src("sandwiched_me")),
+                ("pk_c".to_string(), src("sfdp")),
+            ]),
+        ];
+        let pairs = drain_source_results(results).expect("should succeed");
+        assert_eq!(pairs.len(), 3);
+    }
+
+    /// This is the regression test for the snapshot freeze: one source (e.g.
+    /// Jito) fails, but at least one other succeeds. The cycle must NOT abort —
+    /// it returns the surviving rows so epoch detection / snapshot insert can run.
+    #[test]
+    fn drain_continues_on_partial_failure() {
+        let results = vec![
+            Err(anyhow!("source 'jito': http 503")),
+            Ok(vec![("pk_b".to_string(), src("sandwiched_me"))]),
+            Ok(vec![("pk_c".to_string(), src("sfdp"))]),
+        ];
+        let pairs = drain_source_results(results).expect("partial failure must still succeed");
+        assert_eq!(pairs.len(), 2, "should keep rows from the surviving sources");
+        assert!(pairs.iter().all(|(pk, _)| pk != "pk_a"));
+    }
+
+    /// Every source fails → abort, so we never wipe the epoch's blacklist by
+    /// proceeding with an empty entry set.
+    #[test]
+    fn drain_aborts_when_all_sources_fail() {
+        let results: Vec<Result<Vec<(String, BlacklistResultEntrySource)>>> = vec![
+            Err(anyhow!("source 'jito': http 503")),
+            Err(anyhow!("source 'sandwiched_me': timeout")),
+        ];
+        assert!(
+            drain_source_results(results).is_err(),
+            "all-failed must return Err so the caller skips the cycle"
+        );
+    }
 
     #[tokio::test]
     #[ignore]
