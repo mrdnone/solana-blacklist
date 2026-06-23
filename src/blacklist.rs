@@ -96,9 +96,36 @@ impl BlacklistCollector {
         .collect::<Vec<_>>()
         .await;
 
+        // Drain per-source results. A single failing upstream (e.g. a source
+        // whose API goes 404/down) must NOT abort the whole cycle — otherwise
+        // epoch detection, the active-filter and the epoch-snapshot insert below
+        // never run, freezing the product. Log failures and continue with the
+        // sources that succeeded. Only bail if EVERY source failed, since
+        // proceeding with zero blacklist entries would wipe the epoch's flags.
         let mut pairs: Vec<(String, BlacklistResultEntrySource)> = Vec::new();
+        let mut ok_sources = 0usize;
+        let mut failed_sources = 0usize;
         for r in results {
-            pairs.extend(r?);
+            match r {
+                Ok(rows) => {
+                    ok_sources += 1;
+                    pairs.extend(rows);
+                }
+                Err(err) => {
+                    failed_sources += 1;
+                    eprintln!("[collector] skipping failed source: {err:#}");
+                }
+            }
+        }
+        if ok_sources == 0 {
+            return Err(anyhow!(
+                "all {failed_sources} blacklist source(s) failed; aborting cycle to avoid wiping the epoch blacklist"
+            ));
+        }
+        if failed_sources > 0 {
+            eprintln!(
+                "[collector] {ok_sources} source(s) ok, {failed_sources} failed — continuing with partial data"
+            );
         }
 
         let mut map: BTreeMap<String, BTreeSet<BlacklistResultEntrySource>> = BTreeMap::new();
