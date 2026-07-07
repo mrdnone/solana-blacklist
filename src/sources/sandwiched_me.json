@@ -10,9 +10,16 @@
   },
   "handler": "Json",
   "filters": [
-    "$.stats[?(@.period.Days == 30 && @.sandwichRate > 5)]"
+    "$.stats[?(@.period.Days == 30 && @.blocksProduced >= 100 && @.sandwichRate > ${sandwich_threshold})]"
   ],
   "record_path": "$.data.validators[*]",
   "pubkey_path": "$.validatorVoteAccount",
-  "reason_template": "30-day sandwich rate: {$.stats[?(@.period.Days == 30)].sandwichRate:.2}%"
+  "reason_template": "30-day sandwich rate: {$.stats[?(@.period.Days == 30)].sandwichRate:.2}%",
+  "filter_context": {
+    "sandwich_threshold": {
+      "path": "$.data.clusterMedians[?(@.period.Days == 30)].medianSandwichRate",
+      "scale": 5,
+      "min": 2.0
+    }
+  }
 }

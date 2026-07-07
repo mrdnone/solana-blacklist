@@ -9,7 +9,8 @@
   "filters": [
     "?(@.state == 'Rejected')"
   ],
-  "record_path": "$..*",
+  "record_path": "$[*]",
   "pubkey_path": "$.mainnetBetaPubkey",
-  "reason_path": "$.state"
+  "reason_path": "$.state",
+  "pubkey_kind": "identity"
 }

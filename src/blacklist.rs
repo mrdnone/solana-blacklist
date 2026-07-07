@@ -6,6 +6,8 @@
 //!      - If a filter starts with '$' it is evaluated as-is relative to the record.
 //!      - If a filter starts with '?(' or '[?(' it is wrapped into `$[...]`.
 //!   3) Extract pubkeys by `pubkey_path` (relative to the record), optional `reason_path`.
+//!   4) Sources with `pubkey_kind: "identity"` emit node identity pubkeys; these are
+//!      translated to vote-account pubkeys via RPC/Stakewiz before merging.
 //!
 //! CSV rows become JSON objects with keys:
 //!   - With headers: exact header names + `c{index}` aliases (`c0`, `c1`, ...).
@@ -99,7 +101,56 @@ impl BlacklistCollector {
         // Drain per-source results, tolerating individual upstream failures.
         // See `drain_source_results` for the policy (continue on partial
         // failure, abort only when every source failed).
-        let pairs = drain_source_results(results)?;
+        let mut pairs = drain_source_results(results)?;
+
+        // Fetch active validators (RPC + Stakewiz) and epoch info concurrently.
+        // Done before merging so identity-keyed sources can be translated to
+        // vote pubkeys (the key space used by everything downstream).
+        let (epoch_info, (rpc_set, current_accounts, delinquent_accounts), stakewiz_map) = tokio::join!(
+            fetch_epoch_info(&client, &self.opts.solana_rpc_url),
+            fetch_vote_accounts(&client, &self.opts.solana_rpc_url),
+            fetch_stakewiz_validators(&client),
+        );
+
+        // Translate node identity pubkeys → vote pubkeys for sources marked
+        // pubkey_kind=identity (e.g. SFDP publishes mainnetBetaPubkey, which is
+        // the node identity). Untranslated keys are left as-is and fall out in
+        // the active-filter below, since they belong to non-running validators.
+        let identity_sources: HashSet<&str> = self
+            .sources
+            .values()
+            .filter(|s| s.pubkey_kind == PubkeyKind::Identity)
+            .map(|s| s.name.as_str())
+            .collect();
+        if !identity_sources.is_empty() {
+            let mut identity_to_vote: HashMap<String, String> = current_accounts
+                .iter()
+                .chain(delinquent_accounts.iter())
+                .map(|a| (a.node_pubkey.clone(), a.vote_pubkey.clone()))
+                .collect();
+            for meta in stakewiz_map.values() {
+                if let Some(id) = &meta.identity {
+                    identity_to_vote
+                        .entry(id.clone())
+                        .or_insert_with(|| meta.vote_identity.clone());
+                }
+            }
+            let mut translated = 0usize;
+            let mut unmatched = 0usize;
+            for (pk, src) in pairs.iter_mut() {
+                if identity_sources.contains(src.name.as_str()) {
+                    if let Some(vote) = identity_to_vote.get(pk) {
+                        *pk = vote.clone();
+                        translated += 1;
+                    } else {
+                        unmatched += 1;
+                    }
+                }
+            }
+            println!(
+                "[identity-map] Translated {translated} identity pubkeys to vote pubkeys ({unmatched} unmatched)"
+            );
+        }
 
         let mut map: BTreeMap<String, BTreeSet<BlacklistResultEntrySource>> = BTreeMap::new();
         for (pk, rr) in pairs {
@@ -129,18 +180,14 @@ impl BlacklistCollector {
             })
             .collect::<Vec<_>>();
 
-        // Fetch active validators (RPC + Stakewiz) and epoch info concurrently
-        let (epoch_info, (rpc_set, current_accounts, delinquent_accounts), stakewiz_map) = tokio::join!(
-            fetch_epoch_info(&client, &self.opts.solana_rpc_url),
-            fetch_vote_accounts(&client, &self.opts.solana_rpc_url),
-            fetch_stakewiz_validators(&client),
-        );
-
-        // Filter inactive validators: only keep entries present in at least one active set.
+        // Filter inactive validators: only keep entries in the RPC staked set.
+        // Stakewiz is deliberately NOT a fallback here — it retains stale
+        // entries for long-dead validators (~2x the real active set), which
+        // would let inactive validators through the filter.
         // Guard: skip if the RPC set is empty (RPC failure) to avoid dropping everything.
         if self.opts.filter_inactive && !rpc_set.is_empty() {
             let before = entries.len();
-            entries.retain(|e| rpc_set.contains(&e.pubkey) || stakewiz_map.contains_key(&e.pubkey));
+            entries.retain(|e| rpc_set.contains(&e.pubkey));
             println!(
                 "[active-filter] Filtered {before} → {} entries ({} removed)",
                 entries.len(),
@@ -390,6 +437,18 @@ pub enum BlacklistHandler {
     Csv { delimiter: u8, headers: bool },
 }
 
+/// What kind of pubkey a source's `pubkey_path` yields. The aggregator is
+/// keyed by vote-account pubkeys, so `Identity` sources (e.g. SFDP, which
+/// publishes node identity keys) are translated via the RPC
+/// node_pubkey→vote_pubkey mapping before merging/filtering.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubkeyKind {
+    #[default]
+    Vote,
+    Identity,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlacklistSource {
     /// Human-readable name of the blacklist source.
@@ -419,6 +478,73 @@ pub struct BlacklistSource {
     /// Optional JSONPath for extracting the validator name from the record/row.
     #[serde(default)]
     pub name_path: Option<String>,
+    /// Whether `pubkey_path` yields vote-account pubkeys (default) or node
+    /// identity pubkeys that must be translated to vote pubkeys.
+    #[serde(default)]
+    pub pubkey_kind: PubkeyKind,
+    /// Named scalars extracted from the ROOT document before per-record
+    /// filtering. Each `${name}` occurrence in `filters` is replaced by the
+    /// computed value (`max(scale * value, min)`), enabling thresholds
+    /// relative to document-level aggregates (e.g. cluster medians).
+    /// JSON handler only.
+    #[serde(default)]
+    pub filter_context: HashMap<String, FilterContextVar>,
+}
+
+/// A scalar derived from the root document for use in `filters` via `${name}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterContextVar {
+    /// JSONPath into the root document; the first matched node must be numeric.
+    pub path: String,
+    /// Multiplier applied to the extracted value. Default 1.0.
+    #[serde(default = "default_context_scale")]
+    pub scale: f64,
+    /// Lower bound for the computed value, guarding against degenerate
+    /// aggregates (e.g. a zero median making the threshold flag everyone).
+    #[serde(default)]
+    pub min: Option<f64>,
+}
+
+fn default_context_scale() -> f64 {
+    1.0
+}
+
+/// Resolve `filter_context` variables against the root document and
+/// substitute `${name}` placeholders in the source's filters.
+/// Errors if a context path matches nothing or a non-numeric node, so an
+/// upstream shape change fails the source loudly instead of mis-filtering.
+fn resolve_filter_context(root: &Json, s: &BlacklistSource) -> Result<Vec<String>> {
+    if s.filter_context.is_empty() {
+        return Ok(s.filters.clone());
+    }
+    let mut filters = s.filters.clone();
+    for (name, var) in &s.filter_context {
+        let nodes = jsonpath::select(root, &var.path)
+            .with_context(|| format!("jsonpath filter_context '{}' path '{}'", name, var.path))?;
+        let value = nodes
+            .first()
+            .and_then(|n| n.as_f64())
+            .ok_or_else(|| {
+                anyhow!(
+                    "filter_context '{}': path '{}' matched no numeric value",
+                    name,
+                    var.path
+                )
+            })?;
+        let mut computed = value * var.scale;
+        if let Some(min) = var.min {
+            computed = computed.max(min);
+        }
+        let placeholder = format!("${{{name}}}");
+        for f in &mut filters {
+            *f = f.replace(&placeholder, &computed.to_string());
+        }
+        println!(
+            "[filter-context] source '{}': {} = {} (raw {} × {})",
+            s.name, name, computed, value, var.scale
+        );
+    }
+    Ok(filters)
 }
 
 #[derive(Debug, Clone)]
@@ -522,6 +648,9 @@ async fn process_json(
     let body = fetch(client, s).await?;
     let root: Json = serde_json::from_str(&body).context("parse json")?;
 
+    // Resolve ${name} placeholders in filters from root-level aggregates
+    let filters = resolve_filter_context(&root, s)?;
+
     // 1) candidate records
     let records: Vec<&Json> = if let Some(p) = &s.record_path {
         jsonpath::select(&root, p).with_context(|| format!("jsonpath record_path '{}'", p))?
@@ -533,7 +662,7 @@ async fn process_json(
     extract_from_records(
         records
             .into_iter()
-            .filter(|r| passes_filters(r, &s.filters)),
+            .filter(|r| passes_filters(r, &filters)),
         s,
     )
 }
@@ -936,13 +1065,20 @@ async fn fetch_vote_accounts(
         }
 
         let parsed: RpcVoteAccountsResponse = resp.json().await.context("RPC parse failed")?;
+        // The "active" set means validators that actually participate in
+        // consensus: everyone currently voting, plus delinquents that still
+        // have stake (temporary outages must not lift a blacklist flag).
+        // keepUnstakedDelinquents=true returns ~6k dead zero-stake vote
+        // accounts — those are NOT active and must not inflate this set.
         let mut set =
             HashSet::with_capacity(parsed.result.current.len() + parsed.result.delinquent.len());
         for v in &parsed.result.current {
             set.insert(v.vote_pubkey.clone());
         }
         for v in &parsed.result.delinquent {
-            set.insert(v.vote_pubkey.clone());
+            if v.activated_stake > 0 {
+                set.insert(v.vote_pubkey.clone());
+            }
         }
         Ok((set, parsed.result.current, parsed.result.delinquent))
     }
@@ -1452,6 +1588,85 @@ mod tests {
         );
     }
 
+    fn ctx_source(filters: Vec<&str>, context: HashMap<String, FilterContextVar>) -> BlacklistSource {
+        BlacklistSource {
+            name: "ctx_test".to_string(),
+            url: "http://example.com".to_string(),
+            fetch_headers: None,
+            contact_info: Value::Null,
+            handler: BlacklistHandler::Json,
+            record_path: None,
+            pubkey_path: "$.vote".to_string(),
+            filters: filters.into_iter().map(String::from).collect(),
+            reason_template: None,
+            reason_path: None,
+            name_path: None,
+            pubkey_kind: PubkeyKind::Vote,
+            filter_context: context,
+        }
+    }
+
+    #[test]
+    fn test_filter_context_substitutes_scaled_value() {
+        let root = json!({"medians": [{"days": 30, "rate": 0.8}]});
+        let mut ctx = HashMap::new();
+        ctx.insert(
+            "threshold".to_string(),
+            FilterContextVar {
+                path: "$.medians[?(@.days == 30)].rate".to_string(),
+                scale: 5.0,
+                min: None,
+            },
+        );
+        let s = ctx_source(vec!["$.stats[?(@.rate > ${threshold})]"], ctx);
+        let filters = resolve_filter_context(&root, &s).unwrap();
+        assert_eq!(filters, vec!["$.stats[?(@.rate > 4)]"]);
+    }
+
+    #[test]
+    fn test_filter_context_min_floor_guards_zero_median() {
+        let root = json!({"median": 0.0});
+        let mut ctx = HashMap::new();
+        ctx.insert(
+            "threshold".to_string(),
+            FilterContextVar {
+                path: "$.median".to_string(),
+                scale: 5.0,
+                min: Some(2.0),
+            },
+        );
+        let s = ctx_source(vec!["$.stats[?(@.rate > ${threshold})]"], ctx);
+        let filters = resolve_filter_context(&root, &s).unwrap();
+        assert_eq!(filters, vec!["$.stats[?(@.rate > 2)]"]);
+    }
+
+    #[test]
+    fn test_filter_context_missing_path_errors() {
+        let root = json!({"something": "else"});
+        let mut ctx = HashMap::new();
+        ctx.insert(
+            "threshold".to_string(),
+            FilterContextVar {
+                path: "$.median".to_string(),
+                scale: 1.0,
+                min: None,
+            },
+        );
+        let s = ctx_source(vec!["$.stats[?(@.rate > ${threshold})]"], ctx);
+        assert!(
+            resolve_filter_context(&root, &s).is_err(),
+            "missing context path must fail the source loudly"
+        );
+    }
+
+    #[test]
+    fn test_filter_context_empty_passthrough() {
+        let root = json!({});
+        let s = ctx_source(vec!["?(@.flagged == true)"], HashMap::new());
+        let filters = resolve_filter_context(&root, &s).unwrap();
+        assert_eq!(filters, vec!["?(@.flagged == true)"]);
+    }
+
     #[test]
     fn test_passes_filters_jsonpath() {
         let record = json!({"stats": [{"period": {"Days": 30}, "sandwichRate": 10}]});
@@ -1560,6 +1775,8 @@ mod tests {
             reason_template: None,
             reason_path: None,
             name_path: Some("$.name".to_string()),
+            pubkey_kind: PubkeyKind::Vote,
+            filter_context: Default::default(),
         };
 
         let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
@@ -1591,6 +1808,8 @@ mod tests {
             reason_template: None,
             reason_path: None,
             name_path: None, // not configured
+            pubkey_kind: PubkeyKind::Vote,
+            filter_context: Default::default(),
         };
 
         let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
@@ -1672,6 +1891,8 @@ mod tests {
             reason_template: None,
             reason_path: None,
             name_path: Some("$.name".to_string()),
+            pubkey_kind: PubkeyKind::Vote,
+            filter_context: Default::default(),
         };
 
         let results = extract_from_records(vec![&record].into_iter(), &source).unwrap();
