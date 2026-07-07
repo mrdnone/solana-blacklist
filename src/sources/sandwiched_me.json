@@ -18,7 +18,7 @@
   "filter_context": {
     "sandwich_threshold": {
       "path": "$.data.clusterMedians[?(@.period.Days == 30)].medianSandwichRate",
-      "scale": 5,
+      "scale": 3,
       "min": 2.0
     }
   }
