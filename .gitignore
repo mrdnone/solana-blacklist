@@ -10,3 +10,8 @@ data
 
 .eslintcache
 /node_modules
+
+# Local SQLite database (docker uses ./data; local runs create it in the repo root)
+*.db
+*.db-shm
+*.db-wal

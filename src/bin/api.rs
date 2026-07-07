@@ -793,6 +793,13 @@ fn spawn_background_collector(
 
 #[tokio::main]
 async fn main() {
+    // Load .env if present so local `cargo run` matches docker-compose
+    // (which injects the same file via env_file). Real env vars win.
+    match dotenvy::dotenv() {
+        Ok(path) => println!("[env] Loaded {}", path.display()),
+        Err(_) => println!("[env] No .env file found, using process environment"),
+    }
+
     let sources = default_blacklist_sources();
     let cache: Arc<RwLock<Option<BlacklistResult>>> = Arc::new(RwLock::new(None));
 
