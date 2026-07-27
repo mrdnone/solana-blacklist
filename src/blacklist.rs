@@ -1225,7 +1225,7 @@ async fn fetch_stakewiz_validators(client: &Client) -> HashMap<String, Validator
                     name: r.name,
                     delinquent: r.delinquent,
                     activated_stake: r.activated_stake,
-                    commission: r.commission,
+                    commission: r.commission.map(|c| c / 100.0),
                     skip_rate: r.skip_rate,
                     uptime: r.uptime,
                     version: r.version,
