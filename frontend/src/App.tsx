@@ -27,7 +27,7 @@ export default function App() {
               </svg>
             </a>
             <a
-              href="https://discord.com/users/onlineonline11_21910"
+              href="https://discord.com/users/1172938486106554591"
               target="_blank"
               rel="noopener noreferrer"
               className="text-text-muted hover:text-accent-purple transition-colors duration-300"
