@@ -1,0 +1,16 @@
+{
+  "name": "trillium_jito_blacklisted",
+  "url": "https://api.trillium.so/validator_rewards",
+  "contact_info": {
+    "website": "https://trillium.so"
+  },
+  "handler": "Json",
+  "record_path": "$[*]",
+  "pubkey_path": "$.vote_account_pubkey",
+  "filters": [
+    "?(@.jito_is_blacklisted == true)"
+  ],
+  "reason_template": "Jito Steward blacklisted (epoch {epoch})",
+  "name_path": "$.name",
+  "pubkey_kind": "vote"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "sfdp_drop_list",
+  "url": "https://www.validators.app/api/v1/policies/mainnet/Ai36E1uDdstUmae6yetHT9UE64B9mN7vWFCdjVP6zt9g.json",
+  "contact_info": {
+    "website": "https://www.validators.app/yellowstone-shield"
+  },
+  "handler": "Json",
+  "record_path": "$.validators[*]",
+  "pubkey_path": "$",
+  "filters": [],
+  "reason_template": "Dropped from the Solana Foundation Delegation Program (SFDP drop list)",
+  "pubkey_kind": "identity"
+}

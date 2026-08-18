@@ -1,0 +1,15 @@
+{
+  "name": "validators_app_commission_rug",
+  "url": "https://www.validators.app/api/v1/commission-changes/mainnet.json?per=100",
+  "contact_info": {
+    "website": "https://www.validators.app"
+  },
+  "handler": "Json",
+  "record_path": "$.commission_histories[*]",
+  "pubkey_path": "$.account",
+  "filters": [
+    "?(@.commission_after >= 100)"
+  ],
+  "reason_template": "Commission raised to {commission_after}% in epoch {epoch} (was {commission_before}%)",
+  "pubkey_kind": "identity"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "validators_app_admin_warning",
+  "url": "https://www.validators.app/api/v1/validators/mainnet.json?limit=3000",
+  "contact_info": {
+    "website": "https://www.validators.app"
+  },
+  "handler": "Json",
+  "record_path": "$[*]",
+  "pubkey_path": "$.vote_account",
+  "filters": [
+    "?(@.admin_warning != '')"
+  ],
+  "reason_template": "validators.app: {admin_warning}",
+  "pubkey_kind": "vote"
+}
