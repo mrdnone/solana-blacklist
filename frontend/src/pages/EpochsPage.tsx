@@ -7,7 +7,7 @@ export function EpochsPage() {
   const { data, isLoading, error } = useEpochs()
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
       <EpochList
         data={data}
         isLoading={isLoading}

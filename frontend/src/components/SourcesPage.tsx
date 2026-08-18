@@ -10,7 +10,6 @@ interface Props {
 export function SourcesPage({ onBack, onSuggestSource }: Props) {
   const { data: sourcesMap, isLoading } = useSources()
 
-  // Convert the Record<string, SourceConfig> into an array, meridian last
   const sources = Object.values(sourcesMap ?? {}).sort((a, b) => {
     if (a.name === 'meridian') return 1
     if (b.name === 'meridian') return -1
@@ -18,10 +17,10 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
   })
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-[0.78rem] tracking-[2px] uppercase text-text-muted hover:text-accent-green transition-colors duration-300 font-mono mb-8"
+        className="mrdn-back uppercase mb-8"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -31,16 +30,16 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
 
       <div className="flex items-end justify-between mb-8 gap-4 flex-wrap">
         <div>
-          <h2 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-semibold tracking-[4px] uppercase bg-gradient-to-r from-accent-green to-accent-purple bg-clip-text text-transparent">
+          <h2 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-medium tracking-[4px] uppercase text-text-primary">
             Blacklist Sources
           </h2>
-          <p className="mt-2 text-[0.85rem] text-text-secondary">
+          <p className="mt-2 text-[0.85rem] text-text-secondary font-mono">
             Data is aggregated from {sources.length} independent sources and deduplicated.
           </p>
         </div>
         <button
           onClick={onSuggestSource}
-          className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-accent-purple/20 bg-accent-purple/[0.06] rounded-full px-5 py-2.5 text-accent-purple/80 hover:text-accent-purple hover:border-accent-purple/40 hover:bg-accent-purple/10 transition-all duration-300 whitespace-nowrap"
+          className="mrdn-btn uppercase inline-flex items-center gap-2 whitespace-nowrap"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -67,31 +66,29 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
             return (
               <div
                 key={name}
-                className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 space-y-4 transition-all duration-400 hover:border-white/[0.12]"
+                className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] p-6 space-y-4 transition-all duration-400 hover:bg-[#131a2e] hover:border-[#ff8a4c]/[0.55]"
               >
-                {/* Header row */}
                 <div className="flex items-center gap-3">
                   <SourceBadge name={name} size="md" />
                   {isMeridian ? (
-                    <span className="ml-auto text-[0.68rem] font-mono text-amber-400/70 border border-amber-400/20 bg-amber-400/[0.06] rounded-full px-2.5 py-0.5">
+                    <span className="ml-auto text-[0.68rem] font-mono text-amber-400 border border-amber-400/60 bg-amber-400/[0.08] rounded-[2px] px-2.5 py-0.5">
                       self-hosted
                     </span>
                   ) : (
-                    <span className="ml-auto text-[0.68rem] font-mono text-text-muted border border-white/[0.06] rounded-full px-2.5 py-0.5">
+                    <span className="ml-auto text-[0.68rem] font-mono text-text-muted border border-white/[0.3] rounded-[2px] px-2.5 py-0.5">
                       {handlerLabel}
                     </span>
                   )}
                 </div>
 
-                {/* URL — hidden for meridian */}
                 {!isMeridian && (
                   <div className="space-y-1">
-                    <p className="text-[0.65rem] tracking-[2px] uppercase font-mono text-text-muted">Data Source</p>
+                    <p className="text-[0.65rem] tracking-[3px] uppercase font-mono text-text-muted">Data Source</p>
                     <a
                       href={String(s.url ?? '')}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block font-mono text-[0.72rem] text-accent-green/60 hover:text-accent-green/90 truncate transition-colors duration-200"
+                      className="block font-mono text-[0.72rem] text-text-secondary hover:text-text-primary truncate transition-colors duration-200"
                       title={String(s.url ?? '')}
                     >
                       {String(s.url ?? '')}
@@ -99,10 +96,9 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
                   </div>
                 )}
 
-                {/* Contact links */}
                 {contact && Object.keys(contact).length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[0.65rem] tracking-[2px] uppercase font-mono text-text-muted">Contact</p>
+                    <p className="text-[0.65rem] tracking-[3px] uppercase font-mono text-text-muted">Contact</p>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(contact).map(([type, url]) => (
                         <a
@@ -110,7 +106,7 @@ export function SourcesPage({ onBack, onSuggestSource }: Props) {
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[0.68rem] font-mono tracking-wide border border-white/[0.06] rounded-full px-2.5 py-0.5 text-text-secondary hover:text-text-primary hover:border-white/[0.12] transition-all duration-200 capitalize"
+                          className="inline-flex items-center gap-1.5 text-[0.68rem] font-mono tracking-wide border border-white/[0.3] rounded-[2px] px-2.5 py-0.5 text-text-muted hover:text-text-primary hover:border-white/[0.55] transition-all duration-200 capitalize"
                         >
                           <ContactIcon type={type} />
                           {type}

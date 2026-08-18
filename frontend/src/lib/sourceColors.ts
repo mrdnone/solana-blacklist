@@ -1,38 +1,52 @@
-// Solana-accented source badges — vivid tints per source
-export const SOURCE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  sandwiched_me: {
-    bg: 'bg-orange-500/10',
-    text: 'text-orange-300',
-    border: 'border-orange-400/20',
+export const SOURCE_COLORS: Record<
+  string,
+  { bg: string; text: string; border: string; dot: string }
+> = {
+  'jito:blacklist': {
+    bg: 'bg-white/[0.07]',
+    text: 'text-white',
+    border: 'border-white/[0.5]',
+    dot: '#ffffff',
+  },
+  jito: {
+    bg: 'bg-white/[0.07]',
+    text: 'text-white',
+    border: 'border-white/[0.5]',
+    dot: '#ffffff',
   },
   hanabi: {
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-300',
-    border: 'border-purple-400/20',
+    bg: 'bg-white/[0.05]',
+    text: 'text-[#e6ecf8]',
+    border: 'border-white/[0.4]',
+    dot: '#e6ecf8',
   },
-  'jito:blacklist': {
-    bg: 'bg-cyan-500/10',
-    text: 'text-cyan-300',
-    border: 'border-cyan-400/20',
+  sandwiched_me: {
+    bg: 'bg-white/[0.04]',
+    text: 'text-[#c8d2e6]',
+    border: 'border-white/[0.34]',
+    dot: '#c8d2e6',
   },
-  'solana::sfdp_rejects': {
-    bg: 'bg-rose-500/10',
-    text: 'text-rose-300',
-    border: 'border-rose-400/20',
+  sfdp_rejects: {
+    bg: 'bg-white/[0.03]',
+    text: 'text-[#aab5cd]',
+    border: 'border-white/[0.28]',
+    dot: '#aab5cd',
   },
   meridian: {
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-300',
-    border: 'border-amber-400/20',
+    bg: 'bg-[#ff8a4c]/[0.12]',
+    text: 'text-[#ff8a4c]',
+    border: 'border-[#ff8a4c]/[0.6]',
+    dot: '#ff8a4c',
   },
 }
 
-export const FALLBACK_COLORS = {
-  bg: 'bg-white/[0.05]',
-  text: 'text-white/70',
-  border: 'border-white/[0.12]',
+const FALLBACK = {
+  bg: 'bg-white/[0.04]',
+  text: 'text-[#c8d2e6]',
+  border: 'border-white/[0.34]',
+  dot: '#c8d2e6',
 }
 
 export function getSourceColors(name: string) {
-  return SOURCE_COLORS[name] ?? FALLBACK_COLORS
+  return SOURCE_COLORS[name] ?? FALLBACK
 }

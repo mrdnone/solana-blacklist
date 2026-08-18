@@ -73,7 +73,7 @@ export function HomePage() {
   )
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10 space-y-7">
+    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10 space-y-7">
       <StatsBar
         uniquePubkeys={data?.unique_pubkeys ?? null}
         sourceCount={sourceNames.length > 0 ? sourceNames.length : (data?.sources ?? null)}

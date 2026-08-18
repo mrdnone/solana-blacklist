@@ -16,7 +16,7 @@ export function PubkeyCell({ pubkey, variant = 'green' }: Props) {
     setTimeout(() => setCopied(false), 1500)
   }
 
-  const colorClass = variant === 'red' ? 'text-rose-400/80' : 'text-accent-green/80'
+  const colorClass = variant === 'red' ? 'text-rose-400' : 'text-accent-green'
 
   return (
     <div className="flex items-center gap-1.5 min-w-0">
@@ -25,7 +25,7 @@ export function PubkeyCell({ pubkey, variant = 'green' }: Props) {
       </code>
       <button
         onClick={handleCopy}
-        className="shrink-0 p-1 rounded-md hover:bg-white/[0.06] text-text-muted hover:text-text-primary transition-all duration-300"
+        className="shrink-0 p-1 rounded-[2px] hover:bg-white/[0.10] text-text-muted hover:text-text-primary transition-all duration-300"
         title="Copy pubkey"
       >
         {copied ? (

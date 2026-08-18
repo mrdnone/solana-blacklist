@@ -9,14 +9,14 @@ export function ValidatorDetailPage() {
 
   if (!pubkey) {
     return (
-      <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+      <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
         <p className="text-red-400 text-[0.9rem]">Invalid validator address.</p>
       </main>
     )
   }
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
       <ValidatorDetail
         data={data}
         isLoading={isLoading}

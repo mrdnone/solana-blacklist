@@ -24,9 +24,9 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onVi
   }
 
   return (
-    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 transition-all duration-400 hover:border-white/[0.12] hover:shadow-[0_0_40px_rgba(20,241,149,0.06)]">
-      <h2 className="text-[0.72rem] tracking-[3px] uppercase text-text-muted font-mono mb-4">Pubkey Lookup</h2>
-      <form onSubmit={handleSubmit} className="flex gap-3">
+    <div className="card-glow mrdn-panel px-7 py-[26px] transition-colors duration-400 hover:border-[#ff8a4c]/[0.55]">
+      <h2 className="mrdn-label uppercase font-mono">Pubkey Lookup</h2>
+      <form onSubmit={handleSubmit} className="flex gap-3 mt-4">
         <input
           type="text"
           value={input}
@@ -35,77 +35,74 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onVi
             if (result || error) onClear()
           }}
           placeholder="Paste a vote account or identity pubkey..."
-          className="flex-1 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 font-mono text-[0.82rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300"
+          className="flex-1 min-w-0 rounded-[2px] px-[15px] py-[13px] font-mono text-[13.5px] text-text-primary outline-none transition-all duration-300"
         />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="rounded-full border border-accent-green/25 px-6 py-2.5 text-[0.75rem] tracking-[3px] uppercase font-mono text-accent-green hover:bg-accent-green/10 hover:border-accent-green/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+          className="mrdn-cta shrink-0 px-[30px] py-[14px] text-[12.5px] uppercase disabled:cursor-not-allowed"
         >
           {isLoading ? 'Checking...' : 'Check'}
         </button>
       </form>
 
-      {/* Error */}
       {error && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-rose-400/15 bg-rose-500/[0.04] px-4 py-3">
-          <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+        <div className="mt-4 flex items-center gap-3 mrdn-status-flagged px-4 py-3">
+          <span className="mrdn-node mrdn-node--ember" />
           <p className="text-[0.82rem] text-text-secondary">{error}</p>
         </div>
       )}
 
-      {/* Result */}
       {result && (
-        <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] px-5 py-4 space-y-4">
+        <div className={`mt-5 px-6 py-[22px] ${result.blacklisted ? 'mrdn-status-flagged' : 'mrdn-status-clean'}`}>
 
-          {/* Status row */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3.5 flex-wrap">
             {result.blacklisted ? (
-              <span className="inline-flex items-center rounded-full border border-rose-400/25 bg-rose-500/10 px-3 py-1 text-[0.72rem] tracking-[2px] uppercase font-mono text-rose-300">
+              <span className="inline-flex items-center gap-2 text-[11px] tracking-[2px] uppercase font-mono text-ember">
+                <span className="mrdn-node mrdn-node--ember animate-pulse-glow w-2! h-2!" />
                 Blacklisted
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[0.72rem] tracking-[2px] uppercase font-mono text-emerald-300">
+              <span className="inline-flex items-center gap-2 text-[11px] tracking-[2px] uppercase font-mono text-white">
+                <span className="mrdn-node w-2! h-2!" />
                 Clean
               </span>
             )}
             {result.name && (
-              <span className="text-[0.85rem] text-text-primary font-medium">{result.name}</span>
+              <span className="text-[14px] text-text-primary">{result.name}</span>
             )}
             {result.first_seen && (
-              <span className="text-[0.68rem] font-mono text-text-muted ml-auto">First seen: {result.first_seen}</span>
+              <span className="ml-auto text-[11px] font-mono text-[#dfe6f5]/[0.68]">First seen: {result.first_seen}</span>
             )}
           </div>
 
-          {/* Pubkey fields */}
-          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[0.78rem]">
-            <span className="font-mono text-text-muted">Vote account</span>
-            <code className="font-mono text-text-secondary truncate" title={result.pubkey}>
+          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-[18px] gap-y-[7px] mt-5 text-[12.5px]">
+            <span className="text-[10px] tracking-[2px] uppercase font-mono text-[#dfe6f5]/[0.68] pt-0.5">Vote account</span>
+            <code className="font-mono text-[#dfe6f5]/[0.94] truncate" title={result.pubkey}>
               {truncatePubkey(result.pubkey, 8)}
             </code>
             {result.identity && (
               <>
-                <span className="font-mono text-text-muted">Identity</span>
-                <code className="font-mono text-text-secondary truncate" title={result.identity}>
+                <span className="text-[10px] tracking-[2px] uppercase font-mono text-[#dfe6f5]/[0.68] pt-0.5">Identity</span>
+                <code className="font-mono text-[#dfe6f5]/[0.94] truncate" title={result.identity}>
                   {truncatePubkey(result.identity, 8)}
                 </code>
               </>
             )}
           </div>
 
-          {/* Sources + reasons (blacklisted) */}
           {result.blacklisted && result.sources.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[0.72rem] tracking-[2px] uppercase font-mono text-text-muted">Sources</p>
+            <div className="mt-5 pt-[18px] border-t border-[#ff8a4c]/[0.4] flex flex-col gap-4">
+              <p className="text-[10px] tracking-[2px] uppercase font-mono text-[#dfe6f5]/[0.68]">Sources</p>
               {result.sources.map((s) => (
-                <div key={s.name} className="flex flex-col items-start gap-0.5">
+                <div key={s.name}>
                   <SourceBadge name={s.name} size="sm" />
                   {s.reason ? (
-                    <span className="text-[0.78rem] text-text-secondary leading-snug pl-1">{s.reason}</span>
+                    <div className="mt-2 text-[13px] leading-[1.7] text-[#dfe6f5]/[0.86]">{s.reason}</div>
                   ) : (
-                    <span className="text-[0.72rem] text-text-muted italic leading-snug pl-1">no reason provided</span>
+                    <div className="mt-2 text-[13px] leading-[1.7] text-[#dfe6f5]/[0.68] italic">no reason provided</div>
                   )}
-                  <div className="pl-1">
+                  <div className="mt-2">
                     <AppealLinks contactInfo={sourcesData?.[s.name]?.contact_info} />
                   </div>
                 </div>
@@ -113,23 +110,19 @@ export function PubkeyLookup({ onLookup, onClear, isLoading, result, error, onVi
             </div>
           )}
 
-          {/* Navigation */}
-          {onViewValidator && (
-            <div className="pt-1">
-              <button
-                onClick={() => onViewValidator(result.pubkey)}
-                className="rounded-full border border-accent-green/25 px-4 py-1.5 text-[0.72rem] tracking-[2px] uppercase font-mono text-accent-green hover:bg-accent-green/10 hover:border-accent-green/40 transition-all duration-300 whitespace-nowrap"
-              >
-                View Validator Details &rarr;
-              </button>
-            </div>
-          )}
-
-          {/* Clean but unknown */}
           {!result.blacklisted && !result.in_validators_db && (
-            <p className="text-[0.78rem] text-text-muted">
+            <p className="mt-5 pt-[18px] border-t border-white/[0.3] text-[13px] leading-[1.7] text-[#dfe6f5]/[0.82]">
               This address was not found in any blacklist source.
             </p>
+          )}
+
+          {onViewValidator && (
+            <button
+              onClick={() => onViewValidator(result.pubkey)}
+              className="mrdn-btn mt-[22px] uppercase whitespace-nowrap"
+            >
+              View Validator Details &rarr;
+            </button>
           )}
         </div>
       )}

@@ -14,7 +14,7 @@ export function BlacklistRow({ entry, onValidatorClick }: Props) {
 
   return (
     <tr
-      className="group border-b border-white/[0.04] hover:bg-rose-500/[0.07] transition-all duration-300 cursor-pointer"
+      className="group border-b border-white/[0.16] hover:bg-[#131a2e] transition-all duration-300 cursor-pointer"
       onClick={onValidatorClick ? () => onValidatorClick(entry.pubkey) : undefined}
     >
       <td className="px-5 py-3 text-[0.82rem] text-text-primary truncate group-hover:text-rose-300 transition-colors" title={entry.name ?? undefined}>

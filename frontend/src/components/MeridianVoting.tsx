@@ -23,7 +23,6 @@ interface Props {
 export function MeridianVoting({ onBack, initialTarget }: Props) {
   const votes = useVotes()
 
-  // Vote submission state
   const [target, setTarget] = useState(initialTarget ?? '')
   const [showInstructions, setShowInstructions] = useState(false)
   const [voteTimestamp, setVoteTimestamp] = useState<number | null>(null)
@@ -39,7 +38,6 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
     selectedReason === 'Custom' ? customReason.trim() : (selectedReason ?? '')
   const reasonValid = effectiveReason.length > 0
 
-  // Live countdown for the 10-minute signing window
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
 
   useEffect(() => {
@@ -56,7 +54,6 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
     return () => clearInterval(id)
   }, [voteTimestamp])
 
-  // Detail expansion
   const [expandedTarget, setExpandedTarget] = useState<string | null>(null)
   const voteDetail = useVoteDetail(expandedTarget)
 
@@ -109,10 +106,9 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
 
   return (
     <div className="max-w-[820px] mx-auto px-6 sm:px-12 py-10 space-y-8">
-      {/* Back */}
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-[0.78rem] tracking-[2px] uppercase text-text-muted hover:text-accent-green transition-colors duration-300 font-mono"
+        className="mrdn-back uppercase"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -120,9 +116,8 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
         Back
       </button>
 
-      {/* Title */}
       <div>
-        <h2 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-semibold tracking-[4px] uppercase bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+        <h2 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-medium tracking-[4px] uppercase text-text-primary">
           Meridian Blacklist Reports
         </h2>
         <p className="mt-3 text-[0.88rem] text-text-secondary leading-relaxed">
@@ -130,7 +125,6 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
         </p>
       </div>
 
-      {/* Section 1: How It Works */}
       <Section title="How It Works">
         <ul className="list-disc list-inside space-y-2">
           <li>
@@ -138,17 +132,16 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
           </li>
           <li>Paste the signature proof along with your validator identity pubkey.</li>
           <li>
-            Once a target reaches <strong className="text-amber-300">{votes.data?.threshold ?? 10} reports</strong>, it
+            Once a target reaches <strong className="text-text-primary font-medium">{votes.data?.threshold ?? 10} reports</strong>, it
             will be reviewed by Meridian and may be added to the blacklist.
           </li>
         </ul>
       </Section>
 
-      {/* Section 2: Vote to Blacklist */}
       <Section title="Report to Blacklist">
         <div className="space-y-4">
           <div>
-            <label className="block text-[0.75rem] tracking-[2px] uppercase text-text-muted mb-2 font-mono">
+            <label className="block text-[10px] tracking-[3px] uppercase text-text-muted mb-2 font-mono">
               Target Vote Account Pubkey
             </label>
             <div className="flex gap-3">
@@ -161,12 +154,12 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                   setVoteTimestamp(null)
                 }}
                 placeholder="Enter validator vote account pubkey..."
-                className="flex-1 bg-[#131418] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors"
+                className="flex-1 bg-[#0b1020] border border-white/[0.55] rounded-[2px] px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:border-white/[0.85] transition-colors"
               />
               <button
                 onClick={handleOpenInstructions}
                 disabled={!target.trim()}
-                className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono bg-amber-500/10 border border-amber-500/20 rounded-lg px-5 py-2.5 text-amber-400 hover:bg-amber-500/15 hover:border-amber-500/30 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="mrdn-btn uppercase inline-flex items-center gap-2"
               >
                 Blacklist this validator
               </button>
@@ -174,21 +167,20 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
           </div>
 
           {showInstructions && (
-            <div className="rounded-xl border border-amber-500/10 bg-amber-500/[0.03] p-5 space-y-4">
-              <h4 className="text-[0.82rem] font-mono tracking-[2px] uppercase text-amber-300">
+            <div className="rounded-[2px] border border-white/[0.3] bg-[#0e1324] p-5 space-y-4">
+              <h4 className="text-[0.82rem] font-mono tracking-[3px] uppercase text-text-primary">
                 Signing Instructions
               </h4>
 
-              {/* Step 1: Message */}
               <div className="space-y-1.5">
-                <p className="text-[0.78rem] text-text-muted">1. Canonical message to sign:</p>
+                <p className="text-[0.78rem] text-text-secondary">1. Canonical message to sign:</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-[#131418] border border-white/[0.04] rounded px-3 py-2 text-[0.78rem] text-amber-300/80 font-mono break-all">
+                  <code className="flex-1 bg-[#0b1020] border border-[#ff8a4c]/[0.45] rounded-[2px] px-3 py-2 text-[0.78rem] text-amber-300 font-mono break-all">
                     {canonicalMessage}
                   </code>
                   <button
                     onClick={() => copyToClipboard(canonicalMessage)}
-                    className="shrink-0 text-text-muted hover:text-amber-300 transition-colors p-1.5"
+                    className="shrink-0 text-text-muted hover:text-text-primary transition-colors p-1.5"
                     title="Copy message"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -210,7 +202,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                           setVoteTimestamp(Math.floor(Date.now() / 1000))
                           setSignature('')
                         }}
-                        className="text-[0.70rem] font-mono tracking-[1px] uppercase px-2.5 py-1 rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                        className="text-[0.70rem] font-mono tracking-[2px] uppercase px-2.5 py-1 rounded-[2px] border border-[#ff8a4c]/[0.6] text-ember hover:bg-[#ff8a4c]/[0.10] transition-colors"
                       >
                         Refresh
                       </button>
@@ -219,42 +211,38 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                 )}
               </div>
 
-              {/* Step 2: CLI command */}
               <div className="space-y-1.5">
-                <p className="text-[0.78rem] text-text-muted">2. Sign with Solana CLI:</p>
-                <pre className="bg-[#131418] border border-white/[0.04] rounded px-3 py-2 text-[0.75rem] text-text-secondary font-mono overflow-x-auto">
+                <p className="text-[0.78rem] text-text-secondary">2. Sign with Solana CLI:</p>
+                <pre className="bg-[#0b1020] border border-white/[0.3] rounded-[2px] px-3 py-2 text-[0.75rem] text-text-secondary font-mono overflow-x-auto">
                   {`solana sign-offchain-message -k <identity-keypair> "${canonicalMessage}"`}
                 </pre>
               </div>
 
-              {/* Step 3: Identity */}
               <div className="space-y-1.5">
-                <label className="block text-[0.78rem] text-text-muted">3. Your validator identity pubkey:</label>
+                <label className="block text-[0.78rem] text-text-secondary">3. Your validator identity pubkey:</label>
                 <input
                   type="text"
                   value={voterIdentity}
                   onChange={(e) => setVoterIdentity(e.target.value)}
                   placeholder="Voter identity pubkey..."
-                  className="w-full bg-[#131418] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors"
+                  className="w-full bg-[#0b1020] border border-white/[0.55] rounded-[2px] px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:border-white/[0.85] transition-colors"
                 />
               </div>
 
-              {/* Step 4: Signature */}
               <div className="space-y-1.5">
-                <label className="block text-[0.78rem] text-text-muted">4. Base58 signature:</label>
+                <label className="block text-[0.78rem] text-text-secondary">4. Base58 signature:</label>
                 <input
                   type="text"
                   value={signature}
                   onChange={(e) => setSignature(e.target.value)}
                   placeholder="Paste signature here..."
-                  className="w-full bg-[#131418] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors"
+                  className="w-full bg-[#0b1020] border border-white/[0.55] rounded-[2px] px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:border-white/[0.85] transition-colors"
                 />
               </div>
 
-              {/* Step 5: Reason */}
               <div className="space-y-2">
-                <label className="block text-[0.78rem] text-text-muted">
-                  5. Reason <span className="text-rose-400">*</span>
+                <label className="block text-[0.78rem] text-text-secondary">
+                  5. Reason <span className="text-ember">*</span>
                 </label>
                 <div className="space-y-1.5">
                   {PRESET_REASONS.map((r) => (
@@ -262,10 +250,10 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                       key={r}
                       type="button"
                       onClick={() => setSelectedReason(r)}
-                      className={`w-full text-left rounded-lg border px-4 py-2.5 text-[0.82rem] font-mono transition-colors ${
+                      className={`w-full text-left rounded-[2px] border px-4 py-2.5 text-[0.82rem] font-mono transition-colors ${
                         selectedReason === r
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                          : 'border-white/[0.06] bg-[#131418] text-text-secondary hover:border-white/[0.12]'
+                          ? 'border-[#ff8a4c]/[0.65] bg-[#ff8a4c]/[0.10] text-amber-300'
+                          : 'border-white/[0.3] bg-[#0b1020] text-text-secondary hover:border-white/[0.5]'
                       }`}
                     >
                       {r}
@@ -278,16 +266,15 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                     onChange={(e) => setCustomReason(e.target.value)}
                     placeholder="Describe why this validator should be blacklisted..."
                     rows={3}
-                    className="w-full bg-[#131418] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted/40 focus:outline-none focus:border-amber-500/40 transition-colors resize-none"
+                    className="w-full bg-[#0b1020] border border-white/[0.55] rounded-[2px] px-4 py-2.5 text-[0.85rem] text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:border-white/[0.85] transition-colors resize-none"
                   />
                 )}
               </div>
 
-              {/* Submit */}
               <button
                 onClick={handleSubmit}
                 disabled={submitLoading || !voterIdentity.trim() || !signature.trim() || !reasonValid || secondsLeft === 0}
-                className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono bg-amber-500/15 border border-amber-500/30 rounded-lg px-6 py-2.5 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="mrdn-cta inline-flex items-center gap-2 text-[0.72rem] uppercase px-6 py-2.5 transition-all duration-300 disabled:cursor-not-allowed"
               >
                 {submitLoading ? 'Submitting...' : 'Submit Report'}
               </button>
@@ -295,26 +282,25 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
           )}
 
           {submitResult && (
-            <div className="rounded-lg border border-green-500/20 bg-green-500/[0.06] px-4 py-3 text-[0.82rem] text-green-300">
+            <div className="mrdn-status-clean px-4 py-3 text-[0.82rem] text-text-primary">
               {submitResult}
             </div>
           )}
           {submitError && (
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-4 py-3 text-[0.82rem] text-rose-300">
+            <div className="mrdn-status-flagged px-4 py-3 text-[0.82rem] text-rose-300">
               {submitError}
             </div>
           )}
         </div>
       </Section>
 
-      {/* Section 3: Current Votes */}
       <Section title="Current Reports">
         {votes.isLoading && !votes.data ? (
           <div className="text-text-muted text-[0.82rem] py-4">Loading reports...</div>
         ) : votes.error ? (
           <div className="text-rose-300 text-[0.82rem] py-4">
             Error: {votes.error}{' '}
-            <button onClick={votes.refetch} className="underline text-amber-300 ml-2">
+            <button onClick={votes.refetch} className="underline text-text-primary ml-2">
               Retry
             </button>
           </div>
@@ -331,7 +317,7 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                 <div key={t.target_vote_pubkey}>
                   <button
                     onClick={() => setExpandedTarget(isExpanded ? null : t.target_vote_pubkey)}
-                    className="w-full text-left rounded-lg border border-white/[0.06] bg-[#131418] hover:border-white/[0.1] transition-colors p-4"
+                    className="w-full text-left rounded-[2px] border border-white/[0.3] bg-[#0e1324] hover:bg-[#131a2e] hover:border-[#ff8a4c]/[0.55] transition-colors p-4"
                   >
                     <div className="flex items-center justify-between gap-4">
                       <span className="font-mono text-[0.82rem] text-text-primary" title={t.target_vote_pubkey}>
@@ -342,11 +328,11 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                           {t.vote_count} / {votes.data!.threshold}
                         </span>
                         {reached ? (
-                          <span className="text-[0.68rem] tracking-[1px] uppercase font-mono px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-300 border border-rose-400/20">
+                          <span className="text-[0.68rem] tracking-[2px] uppercase font-mono font-bold px-2.5 py-1 rounded-[2px] bg-[#ff8a4c]/[0.12] text-rose-300 border border-[#ff8a4c]/[0.65]">
                             Blacklisted
                           </span>
                         ) : (
-                          <span className="text-[0.68rem] tracking-[1px] uppercase font-mono px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-400/20">
+                          <span className="text-[0.68rem] tracking-[2px] uppercase font-mono px-2.5 py-1 rounded-[2px] bg-[#ff8a4c]/[0.05] text-amber-300 border border-[#ff8a4c]/[0.4]">
                             Pending
                           </span>
                         )}
@@ -361,16 +347,14 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
                         </svg>
                       </div>
                     </div>
-                    {/* Progress bar */}
-                    <div className="mt-3 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                    <div className="mt-3 h-1.5 rounded-[1px] bg-white/[0.16] overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${reached ? 'bg-rose-500/60' : 'bg-amber-500/60'}`}
+                        className={`h-full rounded-[1px] transition-all duration-500 ${reached ? 'bg-ember' : 'bg-ember/60'}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                   </button>
 
-                  {/* Expanded detail */}
                   {isExpanded && (
                     <VoteDetailPanel detail={voteDetail.data} isLoading={voteDetail.isLoading} error={voteDetail.error} />
                   )}
@@ -383,8 +367,6 @@ export function MeridianVoting({ onBack, initialTarget }: Props) {
     </div>
   )
 }
-
-/* ── Sub-components ── */
 
 function VoteDetailPanel({
   detail,
@@ -400,7 +382,7 @@ function VoteDetailPanel({
   if (!detail?.votes.length) return <div className="px-4 py-3 text-[0.78rem] text-text-muted">No reports yet.</div>
 
   return (
-    <div className="ml-4 mt-1 rounded-lg border border-white/[0.04] bg-[#131418] p-4 space-y-2">
+    <div className="ml-4 mt-1 rounded-[2px] border border-white/[0.3] bg-[#0b1020] p-4 space-y-2">
       {detail.votes.map((v) => (
         <div key={v.signature} className="space-y-0.5">
           <div className="flex items-center justify-between text-[0.78rem]">
@@ -420,7 +402,7 @@ function VoteDetailPanel({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 sm:p-8 space-y-3">
+    <section className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] p-6 sm:p-8 space-y-3">
       <h3 className="font-heading text-[1rem] tracking-[3px] uppercase text-text-primary font-medium">{title}</h3>
       <div className="text-[0.85rem] text-text-secondary leading-relaxed">{children}</div>
     </section>
@@ -429,7 +411,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="font-mono text-[0.8em] bg-white/[0.06] text-amber-300/80 px-1.5 py-0.5 rounded">
+    <code className="font-mono text-[0.8em] bg-white/[0.10] text-text-primary px-1.5 py-0.5 rounded-[2px]">
       {children}
     </code>
   )

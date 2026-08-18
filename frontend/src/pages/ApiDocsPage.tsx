@@ -1,10 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 
-// ── Reusable primitives ────────────────────────────────────────────────────────
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 sm:p-8 space-y-5">
+    <section className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] p-6 sm:p-8 space-y-5">
       <h2 className="font-heading text-[1rem] tracking-[3px] uppercase text-text-primary font-medium">
         {title}
       </h2>
@@ -15,13 +13,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Tag({ color, children }: { color: 'green' | 'amber' | 'purple' | 'cyan'; children: React.ReactNode }) {
   const styles = {
-    green:  'border-accent-green/20 bg-accent-green/[0.06] text-accent-green',
-    amber:  'border-amber-500/20 bg-amber-500/[0.06] text-amber-400',
-    purple: 'border-accent-purple/20 bg-accent-purple/[0.06] text-accent-purple',
-    cyan:   'border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-400',
+    green:  'border-white/[0.55] bg-white/[0.10] text-text-primary font-bold',
+    amber:  'border-[#ff8a4c]/[0.6] bg-[#ff8a4c]/[0.10] text-ember font-bold',
+    purple: 'border-white/[0.3] bg-white/[0.04] text-text-muted',
+    cyan:   'border-white/[0.42] bg-white/[0.07] text-text-secondary',
   }
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.65rem] tracking-[1px] uppercase font-mono ${styles[color]}`}>
+    <span className={`inline-flex items-center rounded-[2px] border px-2.5 py-0.5 text-[0.65rem] tracking-[1px] uppercase font-mono ${styles[color]}`}>
       {children}
     </span>
   )
@@ -29,12 +27,12 @@ function Tag({ color, children }: { color: 'green' | 'amber' | 'purple' | 'cyan'
 
 function Method({ m }: { m: 'GET' | 'POST' | 'DELETE' }) {
   const styles = {
-    GET:    'text-accent-green border-accent-green/30 bg-accent-green/[0.06]',
-    POST:   'text-amber-400 border-amber-400/30 bg-amber-400/[0.06]',
-    DELETE: 'text-rose-400 border-rose-400/30 bg-rose-400/[0.06]',
+    GET:    'text-text-primary border-white/[0.5] bg-white/[0.07]',
+    POST:   'text-ember border-[#ff8a4c]/[0.6] bg-[#ff8a4c]/[0.09]',
+    DELETE: 'text-[#ffc18a] border-[#ff8a4c]/[0.85] bg-[#ff8a4c]/[0.18]',
   }
   return (
-    <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[0.68rem] font-mono font-semibold tracking-widest shrink-0 ${styles[m]}`}>
+    <span className={`inline-flex items-center rounded-[2px] border px-2 py-0.5 text-[0.68rem] font-mono font-bold tracking-widest shrink-0 ${styles[m]}`}>
       {m}
     </span>
   )
@@ -42,7 +40,7 @@ function Method({ m }: { m: 'GET' | 'POST' | 'DELETE' }) {
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="font-mono text-[0.8em] bg-white/[0.06] text-accent-green/80 px-1.5 py-0.5 rounded">
+    <code className="font-mono text-[0.8em] bg-[#131a2e] border border-white/[0.3] text-text-primary px-1.5 py-0.5 rounded-[2px]">
       {children}
     </code>
   )
@@ -50,7 +48,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="p-4 rounded-lg bg-[#131418] border border-white/[0.04] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
+    <pre className="p-4 rounded-[2px] bg-[#0e1324] border border-white/[0.3] overflow-x-auto text-[0.78rem] font-mono text-text-secondary leading-relaxed">
       {children}
     </pre>
   )
@@ -58,9 +56,9 @@ function CodeBlock({ children }: { children: string }) {
 
 function ParamRow({ name, type, required, desc }: { name: string; type: string; required?: boolean; desc: string }) {
   return (
-    <tr className="border-b border-white/[0.04]">
-      <td className="px-4 py-2.5 font-mono text-[0.78rem] text-accent-green/80 whitespace-nowrap">
-        {name}{required && <span className="text-rose-400 ml-0.5">*</span>}
+    <tr className="border-b border-white/[0.16] hover:bg-white/[0.06] transition-colors duration-200">
+      <td className="px-4 py-2.5 font-mono text-[0.78rem] text-text-primary whitespace-nowrap">
+        {name}{required && <span className="text-ember ml-0.5">*</span>}
       </td>
       <td className="px-4 py-2.5 font-mono text-[0.72rem] text-text-muted whitespace-nowrap">{type}</td>
       <td className="px-4 py-2.5 text-[0.82rem] text-text-secondary">{desc}</td>
@@ -70,13 +68,13 @@ function ParamRow({ name, type, required, desc }: { name: string; type: string; 
 
 function ParamTable({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-white/[0.06]">
+    <div className="overflow-x-auto rounded-[2px] border border-white/[0.3] bg-[#0e1324]">
       <table className="w-full text-left">
         <thead>
-          <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-muted">Parameter</th>
-            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-muted">Type</th>
-            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-muted">Description</th>
+          <tr className="border-b border-white/[0.3] bg-[#0e1324]">
+            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">Parameter</th>
+            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">Type</th>
+            <th className="px-4 py-2 text-[0.65rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">Description</th>
           </tr>
         </thead>
         <tbody>{children}</tbody>
@@ -94,8 +92,8 @@ interface EndpointProps {
 
 function Endpoint({ method, path, summary, children }: EndpointProps) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.04] flex-wrap gap-y-2">
+    <div className="rounded-[2px] border border-white/[0.3] bg-[#0e1324] overflow-hidden transition-colors duration-300 hover:bg-[#131a2e] hover:border-[#ff8a4c]/[0.55]">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.3] flex-wrap gap-y-2">
         <Method m={method} />
         <code className="font-mono text-[0.85rem] text-text-primary">{path}</code>
         <span className="text-[0.78rem] text-text-muted ml-auto hidden sm:block">{summary}</span>
@@ -107,8 +105,6 @@ function Endpoint({ method, path, summary, children }: EndpointProps) {
   )
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────────
-
 export function ApiDocsPage() {
   const navigate = useNavigate()
   const base = '/api'
@@ -117,10 +113,9 @@ export function ApiDocsPage() {
   return (
     <div className="max-w-[900px] mx-auto px-6 sm:px-12 py-10 space-y-8">
 
-      {/* Back */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-[0.78rem] tracking-[2px] uppercase text-text-muted hover:text-accent-green transition-colors duration-300 font-mono"
+        className="mrdn-back uppercase"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -128,16 +123,15 @@ export function ApiDocsPage() {
         Back
       </button>
 
-      {/* Title */}
       <div className="space-y-3">
-        <h1 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-semibold tracking-[4px] uppercase bg-gradient-to-r from-accent-green to-accent-purple bg-clip-text text-transparent">
+        <h1 className="font-heading text-[1.8rem] sm:text-[2.2rem] font-medium tracking-[4px] uppercase text-text-primary">
           API Reference
         </h1>
         <p className="text-[0.88rem] text-text-secondary leading-relaxed">
           All endpoints are served under <Code>{base}</Code>. Responses are JSON.
           The interactive Swagger UI is available at{' '}
           <a href={swaggerUrl} target="_blank" rel="noopener noreferrer"
-             className="text-accent-green/80 hover:text-accent-green underline underline-offset-2 decoration-accent-green/30 transition-colors">
+             className="text-text-primary hover:text-white underline underline-offset-2 decoration-[#ff8a4c]/[0.7] transition-colors">
             /docs
           </a>.
         </p>
@@ -148,7 +142,6 @@ export function ApiDocsPage() {
         </div>
       </div>
 
-      {/* ── Blacklist ── */}
       <Section title="Blacklist">
         <Endpoint method="GET" path="/api/sources" summary="List all configured blacklist sources">
           <p>Returns a map of all configured sources keyed by source name, including their URL, handler type, and contact info.</p>
@@ -286,7 +279,6 @@ GET /api/blacklist?source=jito:blacklist
         </Endpoint>
       </Section>
 
-      {/* ── Meridian ── */}
       <Section title="Meridian — Community Blacklist Reports">
         <p className="text-[0.85rem] text-text-secondary leading-relaxed">
           Active validators can cryptographically sign a report to flag a target validator for blacklisting.
@@ -294,14 +286,14 @@ GET /api/blacklist?source=jito:blacklist
           it is reviewed and may be added to the blacklist.
         </p>
 
-        <div className="rounded-xl border border-amber-500/10 bg-amber-500/[0.03] px-5 py-4 space-y-2 text-[0.82rem] text-text-secondary">
-          <p className="text-amber-300 font-mono text-[0.75rem] tracking-[2px] uppercase">How to submit a report</p>
+        <div className="rounded-[2px] border border-[#ff8a4c]/[0.6] bg-[#ff8a4c]/[0.05] px-5 py-4 space-y-2 text-[0.82rem] text-text-secondary">
+          <p className="text-ember font-mono text-[0.75rem] tracking-[3px] uppercase">How to submit a report</p>
           <ol className="list-decimal list-inside space-y-1.5">
             <li>Pick the target vote account pubkey.</li>
             <li>Get the current Unix timestamp (seconds): <Code>date +%s</Code></li>
             <li>Build the canonical message: <Code>meridian:blacklist:&lt;target&gt;:&lt;timestamp&gt;</Code></li>
             <li>Sign it with your validator identity keypair:<br />
-              <code className="block mt-1.5 bg-[#131418] border border-white/[0.04] rounded px-3 py-2 text-[0.75rem] text-amber-300/80 font-mono">
+              <code className="block mt-1.5 bg-[#0e1324] border border-white/[0.3] rounded-[2px] px-3 py-2 text-[0.75rem] text-[#ffc18a] font-mono">
                 solana sign-offchain-message -k &lt;identity-keypair&gt; "meridian:blacklist:&lt;target&gt;:&lt;ts&gt;"
               </code>
             </li>
@@ -362,10 +354,7 @@ Content-Type: application/json
         </Endpoint>
       </Section>
 
-      {/* ── Admin ── */}
-
-      {/* ── Swagger link ── */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] p-6 flex items-center justify-between gap-4 flex-wrap">
+      <div className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] p-6 flex items-center justify-between gap-4 flex-wrap transition-colors duration-300 hover:bg-[#131a2e] hover:border-[#ff8a4c]/[0.55]">
         <div>
           <p className="text-[0.85rem] text-text-primary font-medium">Interactive API Explorer</p>
           <p className="text-[0.78rem] text-text-muted mt-0.5">Try every endpoint directly in the browser via Swagger UI.</p>
@@ -374,7 +363,7 @@ Content-Type: application/json
           href={swaggerUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-accent-green/25 rounded-full px-5 py-2.5 text-accent-green hover:bg-accent-green/10 hover:border-accent-green/40 transition-all duration-300 whitespace-nowrap"
+          className="inline-flex items-center gap-2 text-[0.72rem] tracking-[2px] uppercase font-mono border border-white/[0.3] rounded-[2px] px-5 py-2.5 text-text-muted hover:text-text-primary hover:border-[#ff8a4c]/[0.55] transition-colors duration-300 whitespace-nowrap"
         >
           Open Swagger UI
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

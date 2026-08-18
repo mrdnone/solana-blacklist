@@ -11,14 +11,14 @@ export function EpochDetailPage() {
 
   if (isNaN(epochNum)) {
     return (
-      <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+      <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
         <p className="text-red-400 text-[0.9rem]">Invalid epoch number.</p>
       </main>
     )
   }
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 sm:px-12 py-10">
+    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10">
       <EpochDetail
         epoch={epochNum}
         initialSearch={initialSearch}

@@ -19,8 +19,6 @@ interface Props {
   onVote?: (voteIdentity: string) => void
 }
 
-// ── External links ────────────────────────────────────────────────────────────
-
 function ExternalLinks({ voteIdentity, identity }: { voteIdentity: string; identity?: string }) {
   const id = identity ?? voteIdentity
   const links = [
@@ -53,7 +51,7 @@ function ExternalLinks({ voteIdentity, identity }: { voteIdentity: string; ident
           href={l.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-[0.72rem] tracking-[1px] font-mono border border-white/[0.08] rounded-lg px-3 py-1.5 text-text-secondary hover:text-text-primary hover:border-white/[0.2] transition-all duration-200"
+          className="inline-flex items-center gap-1.5 text-[0.72rem] tracking-[2px] font-mono border border-white/[0.3] rounded-[2px] px-3 py-1.5 text-text-muted hover:text-text-primary hover:border-white/[0.55] transition-all duration-200"
         >
           <span>{l.icon}</span>
           {l.label}
@@ -63,24 +61,22 @@ function ExternalLinks({ voteIdentity, identity }: { voteIdentity: string; ident
   )
 }
 
-// ── Blacklist status card ─────────────────────────────────────────────────────
-
 function BlacklistStatus({ lookup, sourcesData }: { lookup: PubkeyLookupResult | null; sourcesData: SourcesResponse | null }) {
   if (!lookup) return null
 
   if (!lookup.blacklisted) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-accent-green/20 bg-accent-green/[0.05] px-5 py-4">
-        <div className="w-2.5 h-2.5 rounded-full bg-accent-green shrink-0" />
+      <div className="mrdn-status-clean flex items-center gap-3 px-5 py-4">
+        <span className="mrdn-node" />
         <span className="text-[0.85rem] text-accent-green font-mono tracking-wide">Not blacklisted</span>
       </div>
     )
   }
 
   return (
-    <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-5 py-4 space-y-3">
+    <div className="mrdn-status-flagged px-5 py-4 space-y-3">
       <div className="flex items-center gap-3">
-        <div className="w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0 animate-pulse" />
+        <span className="mrdn-node mrdn-node--ember animate-pulse" />
         <span className="text-[0.85rem] text-rose-400 font-mono tracking-wide">Blacklisted</span>
       </div>
       <div className="flex flex-col gap-2">
@@ -103,8 +99,6 @@ function BlacklistStatus({ lookup, sourcesData }: { lookup: PubkeyLookupResult |
   )
 }
 
-// ── Meridian vote summary ────────────────────────────────────────────────────
-
 function MeridianVotes({
   voteIdentity,
   onVote,
@@ -120,14 +114,14 @@ function MeridianVotes({
   const pct = Math.min(100, Math.round((data.vote_count / data.threshold) * 100))
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#17181e]/60 px-5 py-4 space-y-3">
+    <div className="rounded-[2px] border border-white/[0.3] bg-[#0e1324] px-5 py-4 space-y-3">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-[0.65rem] tracking-[2px] uppercase text-text-muted font-mono mb-0.5">
+          <p className="text-[0.65rem] tracking-[3px] uppercase text-text-muted font-mono mb-0.5">
             Community Blacklist Reports
           </p>
           <p className="text-[0.9rem] font-mono text-text-primary">
-            <span className={data.vote_count >= data.threshold ? 'text-rose-400' : 'text-amber-400'}>
+            <span className={data.vote_count >= data.threshold ? 'text-ember font-bold' : 'text-rose-300'}>
               {data.vote_count}
             </span>
             <span className="text-text-muted"> / {data.threshold}</span>
@@ -136,31 +130,30 @@ function MeridianVotes({
         <div className="flex gap-2">
           <button
             onClick={onVotePageClick}
-            className="text-[0.72rem] tracking-[1px] uppercase font-mono border border-white/[0.08] rounded-lg px-3 py-1.5 text-text-secondary hover:text-text-primary hover:border-white/[0.2] transition-all duration-200"
+            className="mrdn-btn mrdn-btn--sm uppercase"
           >
             View reports
           </button>
           {onVote && (
             <button
               onClick={() => onVote(voteIdentity)}
-              className="text-[0.72rem] tracking-[2px] uppercase font-mono border border-amber-500/20 bg-amber-500/[0.06] rounded-lg px-3 py-1.5 text-amber-400/80 hover:text-amber-400 hover:border-amber-500/40 transition-all duration-200"
+              className="text-[0.72rem] tracking-[2px] uppercase font-mono border border-ember/[0.6] bg-ember/[0.08] rounded-[2px] px-3 py-1.5 text-ember hover:bg-ember/[0.14] hover:border-ember/[0.9] transition-all duration-200"
             >
               🚩 Report
             </button>
           )}
         </div>
       </div>
-      {/* Progress bar */}
-      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+      <div className="h-1.5 w-full rounded-[1px] bg-white/[0.16] overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${data.vote_count >= data.threshold ? 'bg-rose-500' : 'bg-amber-500/70'}`}
+          className={`h-full rounded-[1px] transition-all duration-500 ${data.vote_count >= data.threshold ? 'bg-ember' : 'bg-ember/60'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
       {data.votes.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {data.votes.slice(0, 5).map((v) => (
-            <span key={v.voter_identity} className="text-[0.65rem] font-mono text-text-muted border border-white/[0.06] rounded px-1.5 py-0.5" title={v.voter_identity}>
+            <span key={v.voter_identity} className="text-[0.65rem] font-mono text-text-muted border border-white/[0.3] rounded-[2px] px-1.5 py-0.5" title={v.voter_identity}>
               {v.voter_identity.slice(0, 6)}…
             </span>
           ))}
@@ -172,8 +165,6 @@ function MeridianVotes({
     </div>
   )
 }
-
-// ── Epoch calendar ────────────────────────────────────────────────────────────
 
 function EpochCalendar({
   epochs,
@@ -204,10 +195,10 @@ function EpochCalendar({
                 : `Epoch ${s.epoch} — clean`
             }
             className={[
-              'inline-flex items-center justify-center rounded-lg font-mono text-[0.72rem] transition-all duration-200 w-[52px] h-[36px]',
+              'inline-flex items-center justify-center rounded-[2px] font-mono text-[0.72rem] transition-all duration-200 w-[52px] h-[36px]',
               isBlacklisted
-                ? 'border border-rose-500/40 bg-rose-500/[0.12] text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/60'
-                : 'border border-accent-green/20 bg-accent-green/[0.05] text-accent-green/70 hover:bg-accent-green/[0.1] hover:text-accent-green hover:border-accent-green/40',
+                ? 'border border-ember/[0.65] bg-ember/[0.12] text-ember hover:bg-ember/20 hover:border-ember/[0.9]'
+                : 'border border-white/[0.3] bg-white/[0.04] text-text-secondary hover:bg-white/[0.12] hover:text-text-primary hover:border-white/[0.6]',
             ].join(' ')}
           >
             {s.epoch}
@@ -217,8 +208,6 @@ function EpochCalendar({
     </div>
   )
 }
-
-// ── Main component ────────────────────────────────────────────────────────────
 
 export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, onVote }: Props) {
   const navigate = useNavigate()
@@ -238,7 +227,7 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
     return (
       <div className="text-center py-20">
         <p className="text-red-400 text-[0.9rem] mb-4">{error}</p>
-        <button onClick={onBack} className="text-accent-green/80 hover:text-accent-green text-[0.82rem] font-mono">
+        <button onClick={onBack} className="text-text-muted hover:text-text-primary text-[0.82rem] font-mono transition-colors">
           &larr; Back
         </button>
       </div>
@@ -252,10 +241,9 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
 
   return (
     <div className="space-y-5">
-      {/* Back */}
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-2 text-[0.75rem] tracking-[1px] uppercase font-mono text-text-muted hover:text-accent-green transition-colors"
+        className="mrdn-back uppercase"
       >
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -263,30 +251,28 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
         Back
       </button>
 
-      {/* Header card */}
       <div className={[
-        'card-glow rounded-2xl border bg-[#17181e] p-6 space-y-5',
-        isBlacklisted ? 'border-rose-500/20' : 'border-white/[0.06]',
+        'card-glow rounded-[2px] border bg-[#0e1324] p-6 space-y-5',
+        isBlacklisted ? 'border-ember/[0.65]' : 'border-white/[0.3]',
       ].join(' ')}>
-        {/* Avatar + name + addresses */}
         <div className="flex items-start gap-4">
           {v?.image ? (
-            <img src={v.image} alt="" className="w-14 h-14 rounded-full border border-white/[0.1] shrink-0" />
+            <img src={v.image} alt="" className="w-14 h-14 rounded-full border border-white/[0.3] shrink-0" />
           ) : (
-            <div className="w-14 h-14 rounded-full border border-white/[0.08] bg-white/[0.04] shrink-0 flex items-center justify-center text-text-muted text-[1.4rem]">
+            <div className="w-14 h-14 rounded-full border border-white/[0.3] bg-white/[0.07] shrink-0 flex items-center justify-center text-text-muted text-[1.4rem]">
               ◈
             </div>
           )}
           <div className="min-w-0 flex-1 space-y-2">
-            <h2 className="text-[1.3rem] font-heading font-semibold text-text-primary truncate">
+            <h2 className="text-[1.3rem] font-heading font-medium tracking-tight text-text-primary truncate">
               {v?.name && v.name !== '-' ? v.name : 'Unknown Validator'}
             </h2>
             <div className="grid grid-cols-[72px_1fr] gap-x-4 gap-y-1.5 items-center">
-              <span className="text-[0.65rem] tracking-[2px] uppercase text-text-muted font-mono">Vote</span>
+              <span className="text-[0.65rem] tracking-[3px] uppercase text-text-muted font-mono">Vote</span>
               <PubkeyCell pubkey={data.vote_identity} variant={isBlacklisted ? 'red' : 'green'} />
               {v?.node_pubkey && (
                 <>
-                  <span className="text-[0.65rem] tracking-[2px] uppercase text-text-muted font-mono">Identity</span>
+                  <span className="text-[0.65rem] tracking-[3px] uppercase text-text-muted font-mono">Identity</span>
                   <PubkeyCell pubkey={v.node_pubkey} variant={isBlacklisted ? 'red' : 'green'} />
                 </>
               )}
@@ -294,23 +280,20 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
           </div>
         </div>
 
-        {/* External links */}
         <ExternalLinks voteIdentity={data.vote_identity} identity={v?.node_pubkey} />
 
-        {/* Website */}
         {v?.website && (
           <a
             href={v.website}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block text-[0.78rem] text-accent-purple/80 hover:text-accent-purple transition-colors truncate max-w-full"
+            className="inline-block text-[0.78rem] text-text-secondary hover:text-text-primary transition-colors truncate max-w-full"
           >
             {v.website}
           </a>
         )}
       </div>
 
-      {/* Two-column: blacklist status + meridian votes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BlacklistStatus lookup={lookup} sourcesData={sourcesData} />
         <MeridianVotes
@@ -320,10 +303,9 @@ export function ValidatorDetail({ data, isLoading, error, onBack, onEpochClick, 
         />
       </div>
 
-      {/* Epoch blacklist calendar */}
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e]">
-        <div className="px-5 py-3 border-b border-white/[0.04] flex items-center justify-between">
-          <h3 className="text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
+      <div className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] transition-colors duration-200 hover:border-[#ff8a4c]/[0.55]">
+        <div className="px-5 py-3 border-b border-white/[0.3] flex items-center justify-between">
+          <h3 className="text-[0.72rem] tracking-[3px] uppercase text-text-secondary font-mono">
             Epoch History
           </h3>
           <span className="text-[0.72rem] font-mono text-text-muted">

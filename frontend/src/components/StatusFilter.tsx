@@ -1,3 +1,5 @@
+import { clsx } from 'clsx'
+
 interface Props {
   value: 'active' | 'delinquent' | 'all'
   onChange: (value: 'active' | 'delinquent' | 'all') => void
@@ -11,16 +13,12 @@ const options: { label: string; value: Props['value'] }[] = [
 
 export function StatusFilter({ value, onChange }: Props) {
   return (
-    <div className="inline-flex rounded-lg border border-white/[0.06] overflow-hidden">
+    <div className="flex flex-wrap gap-2">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-4 py-1.5 text-[0.72rem] tracking-[1.5px] uppercase font-mono transition-all duration-200 ${
-            value === opt.value
-              ? 'bg-accent-green/10 text-accent-green border-accent-green/20'
-              : 'text-text-muted hover:text-text-secondary hover:bg-white/[0.03]'
-          }`}
+          className={clsx('mrdn-filter px-[18px] py-[9px]', value === opt.value && 'mrdn-filter--active')}
         >
           {opt.label}
         </button>

@@ -31,7 +31,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
     return (
       <div className="text-center py-20">
         <p className="text-red-400 text-[0.9rem] mb-4">{error}</p>
-        <button onClick={onBack} className="text-accent-green/80 hover:text-accent-green text-[0.82rem] font-mono">
+        <button onClick={onBack} className="text-text-secondary hover:text-text-primary text-[0.82rem] font-mono transition-colors">
           &larr; Back
         </button>
       </div>
@@ -48,7 +48,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
     <div className="space-y-6">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-2 text-[0.75rem] tracking-[1px] uppercase font-mono text-text-muted hover:text-accent-green transition-colors"
+        className="mrdn-back uppercase"
       >
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -56,9 +56,9 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
         Back to Blacklist
       </button>
 
-      <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#17181e] overflow-hidden">
-        <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-4">
-          <h3 className="text-[0.72rem] tracking-[2px] uppercase text-text-secondary font-mono">
+      <div className="card-glow rounded-[2px] border border-white/[0.3] bg-[#0e1324] overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/[0.3] flex items-center gap-4">
+          <h3 className="text-[0.68rem] tracking-[3px] uppercase text-text-muted font-mono">
             Stored Epochs <span className="text-text-primary">({countLabel})</span>
           </h3>
           <input
@@ -66,7 +66,7 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
             value={epochSearch}
             onChange={(e) => setEpochSearch(e.target.value)}
             placeholder="Search epoch number..."
-            className="ml-auto max-w-[200px] rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-[0.75rem] text-text-primary placeholder-text-muted outline-none focus:border-accent-green/30 focus:shadow-[0_0_30px_rgba(20,241,149,0.06)] transition-all duration-300"
+            className="ml-auto max-w-[200px] rounded-[2px] border border-white/[0.55] bg-white/[0.07] px-3 py-1.5 font-mono text-[0.75rem] text-text-primary placeholder-text-muted outline-none focus:border-white/[0.85] focus:shadow-none transition-all duration-300"
           />
         </div>
 
@@ -79,10 +79,10 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
         ) : (
           <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-left">
-              <thead className="sticky top-0 z-10 bg-[#17181e]">
-                <tr className="border-b border-white/[0.06]">
+              <thead className="sticky top-0 z-10 bg-[#0e1324]">
+                <tr className="border-b border-white/[0.3]">
                   {['Epoch', 'Validators', 'Total Stake', 'Avg Commission', 'Snapshotted'].map((h) => (
-                    <th key={h} className="px-5 py-3 text-[0.65rem] font-mono font-normal tracking-[2px] uppercase text-text-secondary">
+                    <th key={h} className="px-5 py-3 text-[0.65rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
                       {h}
                     </th>
                   ))}
@@ -93,9 +93,9 @@ export function EpochList({ data, isLoading, error, onBack, onEpochClick }: Prop
                   <tr
                     key={e.epoch}
                     onClick={() => onEpochClick(e.epoch)}
-                    className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer"
+                    className="border-b border-white/[0.16] hover:bg-[#131a2e] transition-all duration-300 cursor-pointer"
                   >
-                    <td className="px-5 py-3 font-mono text-[0.9rem] text-accent-green/80 hover:text-accent-green">
+                    <td className="px-5 py-3 font-mono text-[0.9rem] text-text-primary">
                       {e.epoch}
                     </td>
                     <td className="px-5 py-3 text-[0.85rem] text-text-primary font-mono">

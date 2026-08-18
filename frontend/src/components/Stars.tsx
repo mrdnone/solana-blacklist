@@ -19,7 +19,6 @@ interface ShootingStar {
 
 export function Stars() {
   const layers = useRef<Star[][]>([
-    // Layer 1 — distant, many, faint, slow twinkle
     Array.from({ length: 200 }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -29,7 +28,6 @@ export function Stars() {
       delay: Math.random() * 6,
       layer: 'distant' as const,
     })),
-    // Layer 2 — mid-field stars
     Array.from({ length: 80 }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -39,7 +37,6 @@ export function Stars() {
       delay: Math.random() * 5,
       layer: 'mid' as const,
     })),
-    // Layer 3 — bright close stars with glow
     Array.from({ length: 25 }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,

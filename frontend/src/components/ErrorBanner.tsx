@@ -6,14 +6,14 @@ interface Props {
 
 export function ErrorBanner({ message, onDismiss, onRetry }: Props) {
   return (
-    <div className="card-glow rounded-xl border border-rose-400/15 bg-[#17181e] px-5 py-4 flex items-center gap-4">
-      <div className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(255,100,100,0.4)] shrink-0" />
+    <div className="card-glow rounded-[2px] border border-rose-400/60 bg-[#0e1324] px-5 py-4 flex items-center gap-4">
+      <span className="mrdn-node mrdn-node--ember shrink-0" />
       <p className="text-[0.85rem] text-text-secondary flex-1">{message}</p>
       <div className="flex gap-2 shrink-0">
         {onRetry && (
           <button
             onClick={onRetry}
-            className="text-[0.75rem] tracking-[2px] uppercase text-text-muted hover:text-text-primary border border-white/[0.08] rounded-full px-4 py-1.5 hover:border-white/[0.15] hover:bg-white/[0.04] transition-all duration-300 font-mono"
+            className="mrdn-btn mrdn-btn--sm uppercase"
           >
             Retry
           </button>
