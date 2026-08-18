@@ -1,0 +1,13 @@
+{
+  "name": "Blacklist Explorer",
+  "short_name": "Blacklist",
+  "description": "Solana validator trust layer — aggregated blacklist across independent sources.",
+  "start_url": "/blacklist/",
+  "scope": "/blacklist/",
+  "display": "standalone",
+  "background_color": "#0a0e1c",
+  "theme_color": "#0a0e1c",
+  "icons": [
+    { "src": "/blacklist/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

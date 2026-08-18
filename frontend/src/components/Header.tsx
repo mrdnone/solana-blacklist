@@ -14,7 +14,13 @@ function navClass({ isActive }: { isActive: boolean }) {
 export function Header() {
   return (
     <nav className="mrdn-bar font-mono uppercase">
-      <NavLink to="/" end className="mrdn-wordmark">
+      <NavLink to="/" end className="mrdn-wordmark flex items-center gap-2.5">
+        {/* Same eclipse mark as the favicon. */}
+        <svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true" className="shrink-0">
+          <circle cx="16" cy="16" r="8.5" fill="none" stroke="#dfe6f5" strokeWidth="1.6" />
+          <ellipse cx="16" cy="16" rx="8.5" ry="3.4" fill="none" stroke="#9eaac6" strokeWidth="1.2" transform="rotate(-24 16 16)" />
+          <circle cx="16" cy="16" r="1.8" fill="#ff8a4c" />
+        </svg>
         Blacklist Explorer <span>· Solana Validator Trust Layer</span>
       </NavLink>
 

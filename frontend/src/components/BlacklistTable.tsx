@@ -4,7 +4,8 @@ import type { BlacklistEntry } from '../api/types'
 import { BlacklistRow } from './BlacklistRow'
 import { Spinner } from './Spinner'
 
-const ROW_HEIGHT = 52
+/** Starting guess only — real heights are measured, since the Sources cell wraps. */
+const ROW_HEIGHT = 56
 
 interface Props {
   entries: BlacklistEntry[]
@@ -22,6 +23,9 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
+    // Rows are not uniform: a validator flagged by 4 sources wraps its badges onto
+    // a second line. Measuring keeps the spacer <tr> maths honest.
+    measureElement: (el) => el.getBoundingClientRect().height,
   })
 
   if (isFirstLoad && isLoading) {
@@ -44,29 +48,32 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
       )}
 
       <div ref={scrollRef} className="overflow-auto max-h-[70vh]">
-        <table className="w-full text-left table-fixed">
+        {/* min-width sends narrow viewports to the container's horizontal scroll
+            rather than crushing Sources/Reason into each other. */}
+        <table className="w-full min-w-[920px] text-left table-fixed">
+          {/* Sources needs room for 2–3 badges per line; Reason gives up the slack. */}
           <colgroup>
-            <col className="w-[18%]" />
-            <col className="w-[18%]" />
-            <col className="w-[14%]" />
-            <col className="w-[38%]" />
-            <col className="w-[12%]" />
+            <col className="w-[15%]" />
+            <col className="w-[16%]" />
+            <col className="w-[23%]" />
+            <col className="w-[33%]" />
+            <col className="w-[13%]" />
           </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-white/[0.3] bg-[#0e1324]">
-              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
+              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted whitespace-nowrap">
                 Name
               </th>
-              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
+              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted whitespace-nowrap">
                 Vote Account
               </th>
-              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
+              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted whitespace-nowrap">
                 Sources
               </th>
-              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
+              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted whitespace-nowrap">
                 Reason
               </th>
-              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted">
+              <th className="px-5 py-3 text-[0.64rem] font-mono font-normal tracking-[3px] uppercase text-text-muted whitespace-nowrap">
                 First Seen
               </th>
             </tr>
@@ -92,6 +99,8 @@ export function BlacklistTable({ entries, isLoading, isFirstLoad, totalCount, on
                 {virtualizer.getVirtualItems().map((virtualRow) => (
                   <BlacklistRow
                     key={entries[virtualRow.index].pubkey}
+                    ref={virtualizer.measureElement}
+                    dataIndex={virtualRow.index}
                     entry={entries[virtualRow.index]}
                     onValidatorClick={onValidatorClick}
                   />

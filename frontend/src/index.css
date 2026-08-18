@@ -158,6 +158,56 @@ input:focus, textarea:focus, select:focus {
 }
 input::placeholder, textarea::placeholder { color: rgba(223, 230, 245, 0.5); }
 
+/* ---- Brand mark: the wireframe moon (ported from Meridian app.css) ---- */
+.mrdn-moon-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(230, 236, 250, 0.72);
+  background: radial-gradient(
+    circle at 40% 38%,
+    rgba(223, 230, 245, 0.1),
+    rgba(223, 230, 245, 0.02) 46%,
+    transparent 72%
+  );
+  transition: border-color 0.55s ease;
+}
+.mrdn-moon:hover .mrdn-moon-disc { border-color: rgba(240, 244, 253, 0.92); }
+
+.mrdn-moon-lighting {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  overflow: hidden;
+}
+/* Terminator: darkens the limb away from the light source. */
+.mrdn-moon-lighting::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    132% 132% at 34% 30%,
+    transparent 42%,
+    rgba(10, 14, 28, 0.3) 78%,
+    rgba(10, 14, 28, 0.58) 100%
+  );
+}
+/* Specular hot-spot at the sub-solar point. */
+.mrdn-moon-lighting::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 33% 29%,
+    rgba(240, 244, 253, 0.18),
+    rgba(240, 244, 253, 0.04) 14%,
+    transparent 28%
+  );
+}
+
 .mrdn-node {
   width: 9px; height: 9px;
   border-radius: 50%;

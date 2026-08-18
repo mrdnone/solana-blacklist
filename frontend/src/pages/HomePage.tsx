@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { BlacklistEntry } from '../api/types'
 import { BlacklistTable } from '../components/BlacklistTable'
 import { ErrorBanner } from '../components/ErrorBanner'
+import { Hero } from '../components/Hero'
 import { PubkeyLookup } from '../components/PubkeyLookup'
 import { SourceFilter } from '../components/SourceFilter'
 import { StatsBar } from '../components/StatsBar'
@@ -73,7 +74,10 @@ export function HomePage() {
   )
 
   return (
-    <main className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10 space-y-7">
+    <main>
+      <Hero />
+
+      <div id="blacklist" className="max-w-[1280px] mx-auto px-6 sm:px-12 py-10 space-y-7 scroll-mt-6">
       <StatsBar
         uniquePubkeys={data?.unique_pubkeys ?? null}
         sourceCount={sourceNames.length > 0 ? sourceNames.length : (data?.sources ?? null)}
@@ -118,6 +122,7 @@ export function HomePage() {
           onRetry={refetch}
         />
       )}
+      </div>
     </main>
   )
 }
