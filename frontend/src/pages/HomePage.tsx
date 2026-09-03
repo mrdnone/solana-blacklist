@@ -11,6 +11,7 @@ import { TableSearch } from '../components/TableSearch'
 import { useBlacklist } from '../hooks/useBlacklist'
 import { usePubkeyLookup } from '../hooks/usePubkeyLookup'
 import { useSources } from '../hooks/useSources'
+import { BLACKLIST_ROUTE } from '../lib/routes'
 
 function filterEntries(
   entries: BlacklistEntry[],
@@ -99,7 +100,7 @@ export function HomePage() {
         isLoading={pubkeyLookup.isLoading}
         result={pubkeyLookup.result}
         error={pubkeyLookup.error}
-        onViewValidator={(pubkey) => navigate(`/validators/${pubkey}`)}
+        onViewValidator={(pubkey) => navigate(`/validators/${pubkey}`, { state: { from: BLACKLIST_ROUTE } })}
       />
 
       {!isFirstLoad && (
@@ -112,7 +113,7 @@ export function HomePage() {
           isLoading={isLoading}
           isFirstLoad={isFirstLoad}
           totalCount={data?.unique_pubkeys ?? null}
-          onValidatorClick={(pubkey) => navigate(`/validators/${pubkey}`)}
+          onValidatorClick={(pubkey) => navigate(`/validators/${pubkey}`, { state: { from: BLACKLIST_ROUTE } })}
         />
       )}
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { BLACKLIST_ROUTE } from '../lib/routes'
 
 export function NotFoundPage() {
   return (
@@ -10,7 +11,7 @@ export function NotFoundPage() {
         Page not found.
       </p>
       <Link
-        to="/"
+        to={BLACKLIST_ROUTE}
         className="mrdn-back uppercase"
       >
         ← Back to Blacklist

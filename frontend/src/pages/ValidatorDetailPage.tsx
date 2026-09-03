@@ -1,10 +1,14 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { ValidatorDetail } from '../components/ValidatorDetail'
 import { useValidatorDetail } from '../hooks/useValidatorDetail'
+import { useFromHere, useGoBack } from '../hooks/useGoBack'
+import { BLACKLIST_ROUTE } from '../lib/routes'
 
 export function ValidatorDetailPage() {
   const { pubkey } = useParams<{ pubkey: string }>()
   const navigate = useNavigate()
+  const goBack = useGoBack(BLACKLIST_ROUTE)
+  const from = useFromHere()
   const { data, isLoading, error } = useValidatorDetail(pubkey ?? null)
 
   if (!pubkey) {
@@ -21,9 +25,9 @@ export function ValidatorDetailPage() {
         data={data}
         isLoading={isLoading}
         error={error}
-        onBack={() => navigate(-1)}
-        onEpochClick={(epoch) => navigate(`/epochs/${epoch}?search=${pubkey}`)}
-        onVote={(voteIdentity) => navigate(`/vote/${voteIdentity}`)}
+        onBack={goBack}
+        onEpochClick={(epoch) => navigate(`/epochs/${epoch}?search=${pubkey}`, { state: from })}
+        onVote={(voteIdentity) => navigate(`/vote/${voteIdentity}`, { state: from })}
       />
     </main>
   )

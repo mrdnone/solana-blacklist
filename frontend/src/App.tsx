@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, ScrollRestoration } from 'react-router-dom'
 import { Header } from './components/Header'
 import { Stars } from './components/Stars'
 
@@ -12,6 +12,7 @@ const FOOTER_LINKS = [
 export default function App() {
   return (
     <div className="relative min-h-screen">
+      <ScrollRestoration />
       <Stars />
 
       <div className="relative z-10">

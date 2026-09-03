@@ -1,10 +1,12 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { EpochDetail } from '../components/EpochDetail'
+import { useFromHere } from '../hooks/useGoBack'
 
 export function EpochDetailPage() {
   const { epoch } = useParams<{ epoch: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const from = useFromHere()
 
   const epochNum = epoch !== undefined ? parseInt(epoch, 10) : NaN
   const initialSearch = searchParams.get('search') ?? ''
@@ -23,7 +25,7 @@ export function EpochDetailPage() {
         epoch={epochNum}
         initialSearch={initialSearch}
         onBack={() => navigate('/epochs')}
-        onValidatorClick={(pubkey) => navigate(`/validators/${pubkey}`)}
+        onValidatorClick={(pubkey) => navigate(`/validators/${pubkey}`, { state: from })}
       />
     </main>
   )

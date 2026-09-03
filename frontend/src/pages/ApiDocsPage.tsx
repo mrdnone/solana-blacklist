@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom'
+import { useGoBack } from '../hooks/useGoBack'
+import { BLACKLIST_ROUTE } from '../lib/routes'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -106,7 +107,7 @@ function Endpoint({ method, path, summary, children }: EndpointProps) {
 }
 
 export function ApiDocsPage() {
-  const navigate = useNavigate()
+  const goBack = useGoBack(BLACKLIST_ROUTE)
   const base = '/api'
   const swaggerUrl = `${import.meta.env.VITE_API_ORIGIN ?? ''}/docs`
 
@@ -114,7 +115,7 @@ export function ApiDocsPage() {
     <div className="max-w-[900px] mx-auto px-6 sm:px-12 py-10 space-y-8">
 
       <button
-        onClick={() => navigate(-1)}
+        onClick={goBack}
         className="mrdn-back uppercase"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
