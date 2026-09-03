@@ -42,6 +42,11 @@ function ExternalLinks({ voteIdentity, identity }: { voteIdentity: string; ident
       href: `https://solscan.io/account/${voteIdentity}`,
       icon: '🔬',
     },
+    {
+      label: 'JPool',
+      href: `https://app.jpool.one/validators/${voteIdentity}`,
+      icon: '💧',
+    },
   ]
   return (
     <div className="flex flex-wrap gap-2">

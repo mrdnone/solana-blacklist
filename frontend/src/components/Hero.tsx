@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { MoonLogo } from './MoonLogo'
+import { BLACKLIST_ROUTE } from '../lib/routes'
 
 /**
  * First screen: the Meridian brand mark over the wordmark, centred in the
@@ -31,9 +32,9 @@ export function Hero() {
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-4">
-        <a href="#blacklist" className="mrdn-cta inline-block px-8 py-[15px] font-mono text-[12px] uppercase no-underline">
+        <Link to={BLACKLIST_ROUTE} className="mrdn-cta inline-block px-8 py-[15px] font-mono text-[12px] uppercase no-underline">
           Browse the list
-        </a>
+        </Link>
         <Link to="/sources" className="mrdn-btn inline-block font-mono text-[12px] uppercase no-underline">
           The sources
         </Link>
